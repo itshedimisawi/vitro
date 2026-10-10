@@ -35,7 +35,7 @@ internal class ShaderRenderer : GlassRenderer {
         val radius = glass.shadowRadius.toPx()
         if (glass.shadowOpacity <= 0f || radius <= 0f) return
         val offset = glass.shadowOffset.toPx()
-        val spread = ceil(radius * 2.5f + offset)
+        val spread = ceil(radius + offset)
         shadow.setOutline(this, scene)
         shadow.setFloatUniform("shadow", radius, offset, glass.shadowOpacity)
         drawRect(
@@ -56,7 +56,6 @@ internal class ShaderRenderer : GlassRenderer {
         val light = lightDirection(glass.lightAngle)
         val tint = glass.tint
         material.setOutline(this, scene)
-        material.setFloatUniform("density", density)
         material.setFloatUniform("bevel", glass.refractionHeight.toPx())
         material.setFloatUniform("depth", glass.refractionAmount.toPx())
         material.setFloatUniform("dispersion", glass.dispersion)
@@ -97,7 +96,8 @@ internal class ShaderRenderer : GlassRenderer {
         setFloatUniform("center", scope.size.width / 2f, scope.size.height / 2f)
         setFloatUniform("halfSize", scope.size.width / 2f, scope.size.height / 2f)
         setFloatUniform("radii", scene.radii)
+        setFloatUniform("density", scope.density)
     }
 }
 
-internal const val TintStrength = 0.6f
+internal const val TintStrength = 0.85f

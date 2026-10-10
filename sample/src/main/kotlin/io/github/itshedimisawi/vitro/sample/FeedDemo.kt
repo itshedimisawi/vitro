@@ -40,8 +40,6 @@ private val Accents = listOf(
     Color(0xFFAF52DE),
 )
 
-private val Ink = Color(0xFF111111)
-
 @Composable
 fun BoxScope.FeedDemo(backdrop: GlassBackdrop) {
     LazyColumn(

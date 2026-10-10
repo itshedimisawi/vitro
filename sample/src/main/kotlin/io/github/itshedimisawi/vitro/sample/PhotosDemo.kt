@@ -52,7 +52,7 @@ fun BoxScope.PhotosDemo(backdrop: GlassBackdrop) {
 
     Text(
         text = "Swipe photos, drag the glass",
-        color = Color.White,
+        color = Ink,
         fontSize = 15.sp,
         fontWeight = FontWeight.Medium,
         modifier = Modifier

@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.glassEffect
 import io.github.itshedimisawi.vitro.rememberGlassBackdrop
@@ -40,6 +41,10 @@ class MainActivity : ComponentActivity() {
         setContent { SampleApp() }
     }
 }
+
+val Ink = Color(0xFF111111)
+
+val DarkRegular = Glass.Regular.copy(brightness = -0.8f)
 
 enum class Demo(val title: String) {
     Photos("Photos"),
@@ -53,8 +58,8 @@ fun SampleApp() {
     var demo by rememberSaveable { mutableStateOf(Demo.Photos) }
     var isSolidLight by rememberSaveable { mutableStateOf(false) }
     val backdrop = rememberGlassBackdrop()
-    val isLight = demo == Demo.Feed || (demo == Demo.Solid && isSolidLight)
-    val contentColor = if (isLight) Color(0xFF111111) else Color.White
+    val isDark = demo == Demo.Solid && !isSolidLight
+    val contentColor = if (isDark) Color.White else Ink
 
     MaterialTheme(colorScheme = darkColorScheme()) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -66,6 +71,7 @@ fun SampleApp() {
             }
             TabBar(
                 backdrop = backdrop,
+                glass = if (isDark) DarkRegular else Glass.Regular,
                 selected = demo,
                 contentColor = contentColor,
                 onSelect = { demo = it },
@@ -81,6 +87,7 @@ fun SampleApp() {
 @Composable
 private fun TabBar(
     backdrop: GlassBackdrop,
+    glass: Glass,
     selected: Demo,
     contentColor: Color,
     onSelect: (Demo) -> Unit,
@@ -88,7 +95,7 @@ private fun TabBar(
 ) {
     Row(
         modifier = modifier
-            .glassEffect(backdrop)
+            .glassEffect(backdrop, glass)
             .padding(4.dp),
     ) {
         Demo.entries.forEach { demo ->

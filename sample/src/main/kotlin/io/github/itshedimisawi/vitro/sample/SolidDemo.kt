@@ -57,7 +57,8 @@ private val Tints = listOf(
 @Composable
 fun BoxScope.SolidDemo(backdrop: GlassBackdrop, isLight: Boolean, onToggle: () -> Unit) {
     val bands = if (isLight) LightBands else DarkBands
-    val ink = if (isLight) Color(0xFF111111) else Color.White
+    val ink = if (isLight) Ink else Color.White
+    val regular = if (isLight) Glass.Regular else DarkRegular
 
     Column(Modifier.fillMaxSize().glassBackdrop(backdrop)) {
         bands.forEachIndexed { index, color ->
@@ -85,7 +86,7 @@ fun BoxScope.SolidDemo(backdrop: GlassBackdrop, isLight: Boolean, onToggle: () -
             .align(Alignment.TopCenter)
             .statusBarsPadding()
             .padding(top = 12.dp)
-            .glassEffect(backdrop, Glass.Regular.interactive())
+            .glassEffect(backdrop, regular.interactive())
             .clickable(onClick = onToggle)
             .padding(horizontal = 20.dp, vertical = 14.dp),
     )
@@ -96,13 +97,13 @@ fun BoxScope.SolidDemo(backdrop: GlassBackdrop, isLight: Boolean, onToggle: () -
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
-        Label("Regular", ink, Modifier.glassEffect(backdrop))
+        Label("Regular", ink, Modifier.glassEffect(backdrop, regular))
         Label("Clear", ink, Modifier.glassEffect(backdrop, Glass.Clear))
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(width = 240.dp, height = 130.dp)
-                .glassEffect(backdrop, shape = RoundedCornerShape(32.dp)),
+                .glassEffect(backdrop, regular, RoundedCornerShape(32.dp)),
         ) {
             Text("Rounded panel", color = ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }

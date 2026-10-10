@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.isSpecified
 import kotlin.math.abs
-import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -79,19 +78,19 @@ internal class FallbackPainter {
             drawPath(
                 path = outline,
                 brush = Brush.linearGradient(
-                    0f to glow(0.82f * strength),
-                    0.5f to glow(0.08f * strength),
-                    1f to glow(0.49f * strength),
+                    0f to glow(0.5f * strength),
+                    0.5f to glow(0.1f * strength),
+                    1f to glow(0.5f * strength),
                     start = lit,
                     end = far,
                 ),
-                style = Stroke(width = 3f * density),
+                style = Stroke(width = 4f * density),
             )
             if (bevel > 0f) {
                 drawPath(
                     path = outline,
                     brush = Brush.linearGradient(
-                        0f to glow(0.2f * strength),
+                        0f to glow(0.08f * strength),
                         0.45f to Color.Transparent,
                         start = lit,
                         end = far,
@@ -121,8 +120,8 @@ internal class FallbackPainter {
         if (glass.shadowOpacity <= 0f || radius <= 0f) return
         translate(top = glass.shadowOffset.toPx()) {
             for (step in ShadowSteps downTo 1) {
-                val outer = radius * 2f * step / ShadowSteps
-                val inner = radius * 2f * (step - 1) / ShadowSteps
+                val outer = radius * step / ShadowSteps
+                val inner = radius * (step - 1) / ShadowSteps
                 val alpha = glass.shadowOpacity * (falloff(inner, radius) - falloff(outer, radius))
                 ring.trace(this, scene.radii, -outer)
                 drawPath(ring, Color.Black, alpha = alpha.coerceIn(0f, 1f))
@@ -150,8 +149,10 @@ internal class FallbackPainter {
 
     private fun glow(alpha: Float) = Color.White.copy(alpha = alpha.coerceIn(0f, 1f))
 
-    private fun falloff(distance: Float, radius: Float) =
-        exp(-distance * distance / (radius * radius))
+    private fun falloff(distance: Float, radius: Float): Float {
+        val fraction = ((distance + radius) / (radius * 2f)).coerceIn(0f, 1f)
+        return 1f - fraction * fraction * (3f - 2f * fraction)
+    }
 
     private fun bendAt(fraction: Float): Float {
         val tilt = (1f - fraction) * (1f - fraction)

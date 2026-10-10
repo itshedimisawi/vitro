@@ -26,9 +26,9 @@ import androidx.compose.ui.unit.dp
  * @property dimming Opacity of the dark layer placed behind the glass, from 0 to 1.
  * @property lightAngle Direction the light comes from, in degrees clockwise from straight up.
  * @property highlightIntensity Strength of the rim and specular highlights, where 0 removes them.
- * @property shadowRadius Softness of the shadow cast beneath the glass.
+ * @property shadowRadius Distance over which the shadow cast beneath the glass fades out.
  * @property shadowOffset Distance the shadow is shifted downward.
- * @property shadowOpacity Darkness of the shadow, from 0 to 1.
+ * @property shadowOpacity Darkness of the shadow at its densest, from 0 to 1.
  * @property isInteractive Whether the glass reacts to touch and to its own movement.
  */
 @Immutable
@@ -159,19 +159,19 @@ public class Glass private constructor(
          * symbols placed on top stay legible over any content.
          */
         public val Regular: Glass = Glass(
-            blurRadius = 6.dp,
+            blurRadius = 12.dp,
             refractionHeight = 14.dp,
             refractionAmount = 22.dp,
             dispersion = 0.03f,
-            saturation = 1.3f,
-            brightness = 0.08f,
+            saturation = 1.4f,
+            brightness = 0.5f,
             tint = Color.Unspecified,
             dimming = 0f,
-            lightAngle = -45f,
+            lightAngle = -30f,
             highlightIntensity = 1f,
-            shadowRadius = 14.dp,
-            shadowOffset = 4.dp,
-            shadowOpacity = 0.14f,
+            shadowRadius = 20.dp,
+            shadowOffset = 6.dp,
+            shadowOpacity = 0.08f,
             isInteractive = false,
         )
 
@@ -180,9 +180,9 @@ public class Glass private constructor(
          * controls floating over photos and video; combine with [dimmed] over bright content.
          */
         public val Clear: Glass = Regular.copy(
-            blurRadius = 1.dp,
-            saturation = 1.15f,
-            brightness = 0f,
+            blurRadius = 4.dp,
+            saturation = 1.1f,
+            brightness = 0.1f,
         )
     }
 }
