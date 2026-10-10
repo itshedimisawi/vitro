@@ -15,8 +15,8 @@ import androidx.compose.ui.unit.dp
  * @property refractionHeight Width of the curved rim, measured inward from the edge, where content
  * is bent. The area further inside stays flat and undistorted.
  * @property refractionAmount How far the rim displaces the content it bends. Zero disables lensing.
- * @property dispersion Colour separation along the rim, where 0 is none and around 0.1 is a strong
- * prism-like fringe.
+ * @property dispersion Colour separation along the rim at rest, where 0 is none and around 0.1 is
+ * a strong prism-like fringe. Interactive glass adds its own fringe while pressed.
  * @property saturation Colour intensity of content seen through the glass, where 1 leaves it
  * unchanged.
  * @property brightness How strongly the luminosity of content seen through the glass is adjusted
@@ -167,20 +167,20 @@ public class Glass private constructor(
          * symbols placed on top stay legible over any content.
          */
         public val Regular: Glass = Glass(
-            blurRadius = 12.dp,
-            refractionHeight = 14.dp,
+            blurRadius = 4.dp,
+            refractionHeight = 6.dp,
             refractionAmount = 22.dp,
-            dispersion = 0.03f,
-            saturation = 1.4f,
+            dispersion = 0f,
+            saturation = 1.1f,
             brightness = 0.5f,
             appearance = GlassAppearance.Automatic,
             tint = Color.Unspecified,
             dimming = 0f,
             lightAngle = -45f,
             highlightIntensity = 1f,
-            shadowRadius = 20.dp,
-            shadowOffset = 6.dp,
-            shadowOpacity = 0.06f,
+            shadowRadius = 30.dp,
+            shadowOffset = 8.dp,
+            shadowOpacity = 0.1f,
             isInteractive = false,
         )
 
@@ -189,8 +189,8 @@ public class Glass private constructor(
          * controls floating over photos and video; combine with [dimmed] over bright content.
          */
         public val Clear: Glass = Regular.copy(
-            blurRadius = 4.dp,
-            saturation = 1.1f,
+            blurRadius = 2.dp,
+            saturation = 1f,
             brightness = 0.1f,
         )
     }

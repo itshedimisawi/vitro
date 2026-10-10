@@ -54,6 +54,7 @@ enum class Demo(val title: String) {
     Feed("Feed"),
     Solid("Solid"),
     Playground("Tune"),
+    Patterns("Test"),
 }
 
 @Composable
@@ -71,6 +72,7 @@ fun SampleApp() {
                 Demo.Feed -> FeedDemo(backdrop)
                 Demo.Solid -> SolidDemo(backdrop, isSolidLight) { isSolidLight = !isSolidLight }
                 Demo.Playground -> PlaygroundDemo(backdrop)
+                Demo.Patterns -> PatternsDemo(backdrop)
             }
             TabBar(
                 backdrop = backdrop,
@@ -115,7 +117,7 @@ private fun TabBar(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                     ) { onSelect(demo) }
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
             )
         }
     }

@@ -74,7 +74,7 @@ internal class SnapshotRenderer(
         }
 
         val image = frame
-        vivid.setToSaturation(glass.saturation)
+        vivid.setToMaterial(scene)
         with(painter) {
             paint(scene) {
                 if (image == null) {

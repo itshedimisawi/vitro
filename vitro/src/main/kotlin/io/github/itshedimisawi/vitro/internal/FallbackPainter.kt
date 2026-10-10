@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.isSpecified
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sqrt
 
 internal class FallbackPainter {
 
@@ -37,7 +36,7 @@ internal class FallbackPainter {
             if (bevel > 0f && depth > 0f) {
                 // Each ring redraws the backdrop stretched outward, stepping the lens curve.
                 for (step in 0 until Rings) {
-                    val shift = depth * bendAt((step + 0.5f) / Rings)
+                    val shift = depth * (1f - (step + 0.5f) / Rings)
                     ring.trace(this, scene.radii, bevel * step / Rings)
                     clipPath(ring) {
                         scale(
@@ -53,11 +52,8 @@ internal class FallbackPainter {
                 drawBackdrop()
             }
 
-            val veil = glass.brightness.coerceIn(-1f, 1f) * (1f - 0.6f * scene.pressure)
-            when {
-                veil < 0f -> drawRect(Color.Black, alpha = -veil)
-                scene.isDark -> drawRect(Color.White, alpha = veil * DarkVeil)
-                veil > 0f -> drawRect(Color.White, alpha = veil)
+            if (glass.brightness < 0f) {
+                drawRect(Color.Black, alpha = -glass.brightness.coerceAtLeast(-1f))
             }
             if (glass.tint.isSpecified) {
                 drawRect(glass.tint, alpha = glass.tint.alpha * TintStrength)
@@ -121,12 +117,13 @@ internal class FallbackPainter {
     private fun DrawScope.drawShadow(scene: GlassScene) {
         val glass = scene.glass
         val radius = glass.shadowRadius.toPx()
-        if (glass.shadowOpacity <= 0f || radius <= 0f) return
+        val opacity = scene.shadowOpacity()
+        if (opacity <= 0f || radius <= 0f) return
         translate(top = glass.shadowOffset.toPx()) {
             for (step in ShadowSteps downTo 1) {
                 val outer = radius * step / ShadowSteps
                 val inner = radius * (step - 1) / ShadowSteps
-                val alpha = glass.shadowOpacity * (falloff(inner, radius) - falloff(outer, radius))
+                val alpha = opacity * (falloff(inner, radius) - falloff(outer, radius))
                 ring.trace(this, scene.radii, -outer)
                 drawPath(ring, Color.Black, alpha = alpha.coerceIn(0f, 1f))
             }
@@ -158,17 +155,8 @@ internal class FallbackPainter {
         return 1f - fraction * fraction * (3f - 2f * fraction)
     }
 
-    private fun bendAt(fraction: Float): Float {
-        val tilt = (1f - fraction) * (1f - fraction)
-        val facing = sqrt(1f - tilt * tilt)
-        val ratio = 1f / RefractiveIndex
-        val turn = sqrt(1f - ratio * ratio * tilt * tilt) - ratio * facing
-        return turn * tilt / max(ratio + turn * facing, 0.25f)
-    }
-
     private companion object {
         const val Rings = 5
         const val ShadowSteps = 10
-        const val DarkVeil = 0.12f
     }
 }

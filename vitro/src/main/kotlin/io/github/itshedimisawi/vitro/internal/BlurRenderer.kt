@@ -35,7 +35,7 @@ internal class BlurRenderer : GlassRenderer {
         }
         layer.topLeft = IntOffset(-margin, -margin)
         layer.renderEffect = if (blur > 0f) BlurEffect(blur, blur, TileMode.Clamp) else null
-        vivid.setToSaturation(glass.saturation)
+        vivid.setToMaterial(scene)
         layer.colorFilter = ColorFilter.colorMatrix(vivid)
 
         with(painter) { paint(scene) { drawLayer(layer) } }

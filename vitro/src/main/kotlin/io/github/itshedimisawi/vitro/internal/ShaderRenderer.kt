@@ -33,11 +33,12 @@ internal class ShaderRenderer : GlassRenderer {
     private fun DrawScope.drawShadow(scene: GlassScene) {
         val glass = scene.glass
         val radius = glass.shadowRadius.toPx()
-        if (glass.shadowOpacity <= 0f || radius <= 0f) return
+        val opacity = scene.shadowOpacity()
+        if (opacity <= 0f || radius <= 0f) return
         val offset = glass.shadowOffset.toPx()
         val spread = ceil(radius + offset)
         shadow.setOutline(this, scene)
-        shadow.setFloatUniform("shadow", radius, offset, glass.shadowOpacity)
+        shadow.setFloatUniform("shadow", radius, offset, opacity)
         drawRect(
             brush = shadowBrush,
             topLeft = Offset(-spread, -spread),
