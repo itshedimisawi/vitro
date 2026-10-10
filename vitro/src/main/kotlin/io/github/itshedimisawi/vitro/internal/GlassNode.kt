@@ -35,10 +35,12 @@ import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.LayoutAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.PointerInputModifierNode
+import androidx.compose.ui.node.TraversableNode
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireDensity
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.requireLayoutCoordinates
+import androidx.compose.ui.node.traverseAncestors
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.IntSize
@@ -99,7 +101,10 @@ internal class GlassNode(
     GlobalPositionAwareModifierNode,
     LayoutAwareModifierNode,
     PointerInputModifierNode,
+    TraversableNode,
     CompositionLocalConsumerModifierNode {
+
+    override val traverseKey: Any get() = GlassNode
 
     private var scene: GlassScene? = null
     private var renderer: GlassRenderer? = null
@@ -155,7 +160,7 @@ internal class GlassNode(
         val context = requireGraphicsContext()
         scene = GlassScene(context.createGraphicsLayer(), backdrop.layer, glass)
         isNight = isNightMode()
-        pane = GlassPane(context.createGraphicsLayer()).also {
+        pane = GlassPane(context.createGraphicsLayer(), context.createGraphicsLayer()).also {
             backdrop.panes.add(it)
             beneath = glassBeneath(it, backdrop)
             followTone(it)
@@ -175,6 +180,7 @@ internal class GlassNode(
         scene = null
         pane?.let {
             backdrop.panes.remove(it)
+            requireGraphicsContext().releaseGraphicsLayer(it.surface)
             requireGraphicsContext().releaseGraphicsLayer(it.layer)
         }
         pane = null
@@ -216,7 +222,8 @@ internal class GlassNode(
         val pull = stretch.value
         scene.scaleX = held.scaleX + pull.x - pull.y * 0.5f
         scene.scaleY = held.scaleY + pull.y - pull.x * 0.5f
-        // Everything this glass draws is kept, so glass placed on top of it can show it too.
+        // Everything this glass draws is kept, so glass placed on top of it can show it too: the
+        // material on its own for glass inside this piece, and the whole for the rest.
         // While recording, this scope stands in as its own density, so reading a density from it
         // would never return. The renderer therefore draws with the real one handed to it.
         val screen = requireDensity()
@@ -228,11 +235,16 @@ internal class GlassNode(
         pane.origin = position
         pane.bounds = paintedBounds(scene).translate(scene.origin)
         pane.view = scene.view.translate(scene.origin)
+        pane.within = enclosingGlass(pane.within)
         scene.beneath = beneath?.value.orEmpty()
-        pane.layer.record {
+        scene.enclosing = pane.within
+        pane.surface.record {
             draw(screen, direction, drawContext.canvas, bounds, drawContext.graphicsLayer) {
                 translate(shift.x, shift.y) { with(renderer) { render(scene) } }
             }
+        }
+        pane.layer.record {
+            drawLayer(pane.surface)
             translate(shift.x, shift.y) {
                 scale(scene.scaleX, scene.scaleY, pivot = bounds.center) {
                     this@draw.drawContent()
@@ -274,11 +286,32 @@ internal class GlassNode(
 
     override fun sharePointerInputWithSiblings(): Boolean = !glass.isInteractive
 
+    // The glass under this piece that paints inside its view: pieces added before it and pieces
+    // it is inside of, but never one placed inside it, which is part of its own content.
     // Derived, so this glass is redrawn when glass in its view changes and not when any moves.
     private fun glassBeneath(pane: GlassPane, backdrop: GlassBackdrop) = derivedStateOf {
         val panes = backdrop.panes
         val index = panes.indexOf(pane)
-        if (index <= 0) emptyList() else panes.subList(0, index).filter { it.bounds.overlaps(pane.view) }
+        val within = pane.within
+        panes.filterIndexed { position, other ->
+            other !== pane &&
+                (other in within || position < index && pane !in other.within) &&
+                other.bounds.overlaps(pane.view)
+        }
+    }
+
+    // The glass whose content this piece is part of, outermost first. Returns [known] when
+    // nothing has changed, so the common case of standing alone costs nothing.
+    private fun enclosingGlass(known: List<GlassPane>): List<GlassPane> {
+        var found: ArrayList<GlassPane>? = null
+        traverseAncestors(GlassNode) { ancestor ->
+            (ancestor as GlassNode).pane?.let { outer ->
+                if (outer in backdrop.panes) (found ?: ArrayList<GlassPane>().also { found = it }).add(0, outer)
+            }
+            true
+        }
+        val enclosing = found ?: emptyList()
+        return if (enclosing == known) known else enclosing
     }
 
     private fun watchTone(isWanted: Boolean) {

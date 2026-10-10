@@ -16,8 +16,10 @@ internal class GlassScene(
     var backdrop: GraphicsLayer,
     var glass: Glass,
 ) {
-    // Glass lying under this one that paints inside `view`, lowest first.
+    // Glass lying under this one that paints inside `view`, lowest first, and those among them
+    // that this glass is inside of.
     var beneath: List<GlassPane> = emptyList()
+    var enclosing: List<GlassPane> = emptyList()
     var origin: Offset = Offset.Zero
     // What this glass takes in of the backdrop, measured from its own corner.
     var view: Rect = Rect.Zero
@@ -34,13 +36,16 @@ internal class GlassScene(
 
 /**
  * Draws what this glass takes in, with the corner of its view at the top left: the backdrop, then
- * the glass beneath that reaches into the view.
+ * the glass beneath that reaches into the view. Glass this piece is inside of shows as its bare
+ * material, since its content includes this piece.
  */
 internal fun DrawScope.drawView(scene: GlassScene) {
     translate(-scene.origin.x - scene.view.left, -scene.origin.y - scene.view.top) {
         drawLayer(scene.backdrop)
         for (pane in scene.beneath) {
-            translate(pane.origin.x, pane.origin.y) { drawLayer(pane.layer) }
+            translate(pane.origin.x, pane.origin.y) {
+                drawLayer(if (pane in scene.enclosing) pane.surface else pane.layer)
+            }
         }
     }
 }

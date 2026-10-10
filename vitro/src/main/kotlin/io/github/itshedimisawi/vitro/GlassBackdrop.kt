@@ -27,7 +27,8 @@ import io.github.itshedimisawi.vitro.internal.GlassBackdropElement
 public class GlassBackdrop internal constructor(internal val layer: GraphicsLayer) {
     internal var coordinates: LayoutCoordinates? = null
 
-    // Glass drawn over this backdrop, lowest first. Each piece shows through the ones above it.
+    // Glass drawn over this backdrop, in the order it was added. Each piece shows through the
+    // ones added after it, and through any placed inside its own content.
     internal val panes = mutableStateListOf<GlassPane>()
     internal var generation: Int by mutableIntStateOf(0)
 
@@ -37,13 +38,16 @@ public class GlassBackdrop internal constructor(internal val layer: GraphicsLaye
 }
 
 /**
- * One piece of glass over a backdrop: everything it draws and where its corner sits, the area of
- * the backdrop it paints on (shadow included) and the area it takes in to draw itself.
+ * One piece of glass over a backdrop. [surface] holds its shadow and material, and [layer] holds
+ * those with its content on top. It also records where its corner sits, the area of the backdrop
+ * it paints on (shadow included), the area it takes in to draw itself, and the glass it lies
+ * [within]: the pieces whose content it is part of, outermost first.
  */
-internal class GlassPane(val layer: GraphicsLayer) {
+internal class GlassPane(val surface: GraphicsLayer, val layer: GraphicsLayer) {
     var origin by mutableStateOf(Offset.Zero)
     var bounds by mutableStateOf(Rect.Zero)
     var view by mutableStateOf(Rect.Zero)
+    var within by mutableStateOf(emptyList<GlassPane>())
 }
 
 /**

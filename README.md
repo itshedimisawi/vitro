@@ -90,7 +90,7 @@ Box(Modifier.glassEffect(backdrop)) { /* a bar */ }
 Box(Modifier.glassEffect(backdrop, Glass.Clear.copy(magnification = 0.9f))) // shows the bar through it
 ```
 
-`magnification` scales what is seen through the glass about its centre. Below 1 the glass takes in a wider area than it covers, which keeps the edges of whatever lies under it in view. Glass placed inside the content of another piece of glass does not see that piece.
+`magnification` scales what is seen through the glass about its centre. Below 1 the glass takes in a wider area than it covers, which keeps the edges of whatever lies under it in view. Glass placed inside the content of another piece of glass sees that piece's material under it, without the content it is itself part of. Which piece counts as on top follows the order the glass is added, not `zIndex`.
 
 ### Light and dark
 
