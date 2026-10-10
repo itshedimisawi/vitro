@@ -116,7 +116,7 @@ Text(
 
 ## Sample
 
-The `sample` module shows glass over photos, on a playlist screen with toolbars, search, an alert and a tab bar, over solid colours, a screen with a slider for every property, and a set of test patterns for judging blur and refraction.
+The `sample` module shows glass over photos, on a playlist screen with toolbars, search, an alert and a tab bar, over solid colours, a screen with a slider for every property, and a set of test patterns for judging blur and refraction. The Music button on the first tab opens a second screen: the main pages of a music app (home, radio, library, search) with a tab bar that shrinks to a button as you scroll, a player and a search button that stretches into a field, for comparing the glass with a real iOS app side by side.
 
 ```
 ./gradlew :sample:installDebug

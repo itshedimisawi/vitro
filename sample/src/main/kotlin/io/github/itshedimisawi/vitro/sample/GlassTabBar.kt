@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -60,11 +58,8 @@ import io.github.itshedimisawi.vitro.rememberGlassInteractionState
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.collectLatest
 
-private val BarHeight = 62.dp
-private val BarMargin = 20.dp
 private val SelectionInset = 4.dp
 private val LensGrowth = 21.dp
-private val LensRoom = 14.dp
 private const val LensZoom = 0.15f
 private const val LensMagnification = 0.88f
 private val TabIconSize = 24.dp
@@ -81,6 +76,10 @@ private val SettleSpring = spring<Float>(dampingRatio = 0.7f, stiffness = 400f)
  * interactive glass, so it swells and leans toward a held finger. Its selection listens to the
  * same touch: while the bar is held it lifts into a clear lens that follows the finger and shows
  * the bar through it, and on release it settles on the nearest tab.
+ *
+ * The bar takes its size from [modifier]. As [minimized] goes from 0 to 1 the tabs give way to
+ * the selected tab's icon alone, for a caller that shrinks the bar to a round button; a press on
+ * the minimized bar calls [onRestore] and selects nothing.
  */
 @Composable
 fun GlassTabBar(
@@ -90,12 +89,18 @@ fun GlassTabBar(
     backdrop: GlassBackdrop,
     glass: Glass,
     modifier: Modifier = Modifier,
+    accent: Color = Accent,
+    minimized: () -> Float = { 0f },
+    isMinimizedIconAccented: Boolean = true,
+    onRestore: () -> Unit = {},
 ) {
     val touch = rememberGlassInteractionState()
     val ink = rememberGlassInk(glass)
     val contentColor = ink.color
     val density = LocalDensity.current
     val select by rememberUpdatedState(onSelect)
+    val restore by rememberUpdatedState(onRestore)
+    val isMinimized by rememberUpdatedState { minimized() > 0.5f }
     var barSize by remember { mutableStateOf(IntSize.Zero) }
     // Where the selection rests, counted in tabs: 0 is the first tab, 1.5 is between the second and third.
     val slot = remember { Animatable(selected.toFloat()) }
@@ -112,7 +117,7 @@ fun GlassTabBar(
     }
 
     fun currentSlot(): Float {
-        if (touch.isHeld) {
+        if (touch.isHeld && !isMinimized()) {
             val under = slotUnder(touch.position.x)
             if (!follow.isActive) {
                 follow.isActive = true
@@ -149,6 +154,11 @@ fun GlassTabBar(
                 if (catchUp.value != 0f) catchUp.animateTo(0f, SettleSpring)
             } else if (at != settledAt) {
                 settledAt = at
+                if (isMinimized()) {
+                    follow.isActive = false
+                    restore()
+                    return@collectLatest
+                }
                 val nearest = slotUnder(at.x).roundToInt()
                 if (follow.isActive) slot.snapTo(follow.last)
                 follow.isActive = false
@@ -162,54 +172,60 @@ fun GlassTabBar(
         if (!touch.isHeld) slot.animateTo(selected.toFloat(), SettleSpring)
     }
 
-    Box(modifier.fillMaxWidth().height(BarHeight + LensRoom * 2)) {
-        Box(Modifier.fillMaxSize()) {
-            Box(
-                Modifier
+    Box(modifier) {
+        val selectionStrength = if (ink.isDark) 0.15f else 0.07f
+        Box(
+            Modifier
+                .fillMaxSize()
+                .onSizeChanged { barSize = it }
+                .glassEffect(backdrop, glass.interactive(), interaction = touch, onAppearanceChanged = ink::follow)
+                .drawBehind {
+                    val rest = 1f - touch.pressure.coerceIn(0f, 1f)
+                    val bounds = selection()
+                    drawRoundRect(
+                        color = contentColor,
+                        topLeft = bounds.topLeft,
+                        size = bounds.size,
+                        cornerRadius = CornerRadius(bounds.height / 2f),
+                        alpha = selectionStrength * rest * tabsAlpha(minimized()),
+                    )
+                },
+        ) {
+            // Outside the selection the labels are plain; inside it they take the accent
+            // colour and are enlarged a little as the selection lifts.
+            val fading = Modifier.graphicsLayer { alpha = tabsAlpha(minimized()) }
+            Tabs(
+                tabs = tabs,
+                color = contentColor,
+                modifier = fading.drawWithContent {
+                    clipPath(selection().capsule(), ClipOp.Difference) {
+                        this@drawWithContent.drawContent()
+                    }
+                },
+            )
+            Tabs(
+                tabs = tabs,
+                color = accent,
+                modifier = fading.drawWithContent {
+                    val bounds = selection()
+                    val zoom = 1f + LensZoom * touch.pressure.coerceIn(0f, 1f)
+                    clipPath(bounds.capsule()) {
+                        scale(zoom, bounds.center) { this@drawWithContent.drawContent() }
+                    }
+                },
+            )
+            Icon(
+                imageVector = tabs[selected].icon,
+                contentDescription = null,
+                tint = if (isMinimizedIconAccented) accent else contentColor,
+                modifier = Modifier
                     .align(Alignment.Center)
-                    .padding(horizontal = BarMargin)
-                    .fillMaxWidth()
-                    .height(BarHeight)
-                    .onSizeChanged { barSize = it }
-                    .glassEffect(backdrop, glass.interactive(), interaction = touch, onAppearanceChanged = ink::follow)
-                    .drawBehind {
-                        val rest = 1f - touch.pressure.coerceIn(0f, 1f)
-                        val bounds = selection()
-                        drawRoundRect(
-                            color = contentColor,
-                            topLeft = bounds.topLeft,
-                            size = bounds.size,
-                            cornerRadius = CornerRadius(bounds.height / 2f),
-                            alpha = 0.09f * rest,
-                        )
-                    },
-            ) {
-                // Outside the selection the labels are plain; inside it they take the accent
-                // colour and are enlarged a little as the selection lifts.
-                Tabs(
-                    tabs = tabs,
-                    color = contentColor,
-                    modifier = Modifier.drawWithContent {
-                        clipPath(selection().capsule(), ClipOp.Difference) {
-                            this@drawWithContent.drawContent()
-                        }
-                    },
-                )
-                Tabs(
-                    tabs = tabs,
-                    color = Accent,
-                    modifier = Modifier.drawWithContent {
-                        val bounds = selection()
-                        val zoom = 1f + LensZoom * touch.pressure.coerceIn(0f, 1f)
-                        clipPath(bounds.capsule()) {
-                            scale(zoom, bounds.center) { this@drawWithContent.drawContent() }
-                        }
-                    },
-                )
-            }
+                    .size(TabIconSize)
+                    .graphicsLayer { alpha = 1f - tabsAlpha(minimized() - 0.6f) },
+            )
         }
 
-        val isLifted by remember { derivedStateOf { touch.pressure > 0.01f } }
+        val isLifted by remember { derivedStateOf { touch.pressure > 0.01f && !isMinimized() } }
         if (isLifted) {
             val lens = remember(ink.isDark) {
                 // Clear glass with a thin rim that takes in a little more than it covers, so
@@ -226,10 +242,7 @@ fun GlassTabBar(
                 Modifier
                     .offset {
                         val bounds = lensBounds()
-                        IntOffset(
-                            (BarMargin.toPx() + bounds.left).roundToInt(),
-                            (LensRoom.toPx() + bounds.top).roundToInt(),
-                        )
+                        IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt())
                     }
                     .layout { measurable, _ ->
                         val bounds = lensBounds()
@@ -244,6 +257,9 @@ fun GlassTabBar(
         }
     }
 }
+
+// The tabs are gone well before the bar has finished shrinking, and the lone icon comes in after.
+private fun tabsAlpha(minimized: Float): Float = (1f - minimized * 2.5f).coerceIn(0f, 1f)
 
 private fun Rect.capsule(): Path =
     Path().apply { addRoundRect(RoundRect(this@capsule, CornerRadius(height / 2f))) }

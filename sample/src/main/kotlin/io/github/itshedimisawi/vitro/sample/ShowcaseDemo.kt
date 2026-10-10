@@ -1,6 +1,5 @@
 package io.github.itshedimisawi.vitro.sample
 
-import android.graphics.BitmapFactory
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -56,9 +55,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
@@ -324,19 +321,6 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
             glass = glass,
             modifier = Modifier.align(Alignment.Center),
         )
-    }
-}
-
-/**
- * The photos at half size, decoded once and shared by every row and card that shows one. Loading
- * each use at full size would keep more pictures alive than the graphics memory can hold.
- */
-@Composable
-private fun rememberArtwork(): List<ImageBitmap> {
-    val resources = LocalContext.current.resources
-    return remember(resources) {
-        val half = BitmapFactory.Options().apply { inSampleSize = 2 }
-        Photos.map { BitmapFactory.decodeResource(resources, it, half).asImageBitmap() }
     }
 }
 

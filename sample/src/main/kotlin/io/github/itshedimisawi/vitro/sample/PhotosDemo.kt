@@ -1,5 +1,6 @@
 package io.github.itshedimisawi.vitro.sample
 
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -19,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,6 +31,7 @@ import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.glassBackdrop
 import io.github.itshedimisawi.vitro.glassEffect
+import io.github.itshedimisawi.vitro.sample.music.MusicActivity
 
 val Photos = listOf(
     R.drawable.photo_1015,
@@ -62,6 +67,16 @@ fun BoxScope.PhotosDemo(backdrop: GlassBackdrop) {
             .padding(top = 12.dp)
             .glassEffect(backdrop)
             .padding(horizontal = 20.dp, vertical = 14.dp),
+    )
+
+    val context = LocalContext.current
+    GlassTextButton(
+        text = "Music",
+        icon = Icons.Rounded.MusicNote,
+        onClick = { context.startActivity(Intent(context, MusicActivity::class.java)) },
+        backdrop = backdrop,
+        glass = Glass.Regular,
+        modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 76.dp),
     )
 
     val lens = remember { mutableStateOf(Offset.Zero) }
