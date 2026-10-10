@@ -1,9 +1,11 @@
 package io.github.itshedimisawi.vitro.internal
 
 import android.graphics.Bitmap
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
+import io.github.itshedimisawi.vitro.GlassPane
 import kotlin.math.ceil
 import kotlin.math.floor
 
@@ -18,8 +20,11 @@ internal class BackdropTone private constructor(
     private val brightness: FloatArray,
 ) {
 
-    /** Mean brightness inside [area], given in backdrop pixels, or NaN if the area misses the backdrop. */
-    fun mean(area: Rect): Float {
+    /**
+     * Mean brightness of what lies inside [area], given in backdrop pixels: the backdrop as seen
+     * through the glass [beneath], lowest first. NaN if the area misses the backdrop.
+     */
+    fun mean(area: Rect, beneath: List<GlassPane>): Float {
         val left = floor(area.left / cell).toInt().coerceAtLeast(0)
         val top = floor(area.top / cell).toInt().coerceAtLeast(0)
         val right = ceil(area.right / cell).toInt().coerceAtMost(columns)
@@ -27,7 +32,16 @@ internal class BackdropTone private constructor(
         if (left >= right || top >= bottom) return Float.NaN
         var sum = 0f
         for (row in top until bottom) {
-            for (column in left until right) sum += brightness[row * columns + column]
+            for (column in left until right) {
+                var seen = brightness[row * columns + column]
+                if (beneath.isNotEmpty()) {
+                    val spot = Offset((column + 0.5f) * cell, (row + 0.5f) * cell)
+                    for (pane in beneath) {
+                        if (pane.outline.contains(spot)) seen = pane.shade.through(seen)
+                    }
+                }
+                sum += seen
+            }
         }
         return sum / ((right - left) * (bottom - top))
     }

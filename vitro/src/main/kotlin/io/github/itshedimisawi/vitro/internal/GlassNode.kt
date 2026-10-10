@@ -116,7 +116,7 @@ internal class GlassNode(
     private val stretch = Animatable(Offset.Zero, Offset.VectorConverter)
     private val ownTouch = GlassInteractionState()
     private var touch = interaction ?: ownTouch
-    private var measured by mutableStateOf(Size.Zero)
+    private var measured = Size.Zero
 
     private var glass by mutableStateOf(glass)
     private var isNight by mutableStateOf(false)
@@ -233,6 +233,8 @@ internal class GlassNode(
         // so each piece knows which of the others it has in view.
         scene.view = with(renderer) { view(scene) }
         pane.origin = position
+        pane.outline = Rect(scene.origin, size)
+        pane.shade = scene.shade()
         pane.bounds = paintedBounds(scene).translate(scene.origin)
         pane.view = scene.view.translate(scene.origin)
         pane.within = enclosingGlass(pane.within)
@@ -321,16 +323,19 @@ internal class GlassNode(
     }
 
     // Keeps the material in step with the appearance asked for and, when that is automatic, with
-    // the content under this glass. A change brought by the content is eased in; the rest is immediate.
+    // what lies under this glass: the backdrop as seen through the glass beneath it. A change
+    // brought by that is eased in; the rest is immediate.
     private fun followTone(pane: GlassPane) {
         val backdrop = backdrop
+        val beneath = beneath
         toning?.cancel()
         toning = coroutineScope.launch {
             var shown: GlassAppearance? = null
             var wasSampled = false
             snapshotFlow {
                 val brightness = when (glass.appearance) {
-                    GlassAppearance.Automatic -> backdrop.tone?.mean(Rect(pane.origin, measured)) ?: Float.NaN
+                    GlassAppearance.Automatic ->
+                        backdrop.tone?.mean(pane.outline, beneath?.value.orEmpty()) ?: Float.NaN
                     else -> Float.NaN
                 }
                 val wanted = when {

@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import io.github.itshedimisawi.vitro.internal.BackdropTone
 import io.github.itshedimisawi.vitro.internal.GlassBackdropElement
+import io.github.itshedimisawi.vitro.internal.GlassShade
 
 /**
  * Handle to the content that glass refracts.
@@ -39,14 +40,17 @@ public class GlassBackdrop internal constructor(internal val layer: GraphicsLaye
 
 /**
  * One piece of glass over a backdrop. [surface] holds its shadow and material, and [layer] holds
- * those with its content on top. It also records where its corner sits, the area of the backdrop
- * it paints on (shadow included), the area it takes in to draw itself, and the glass it lies
- * [within]: the pieces whose content it is part of, outermost first.
+ * those with its content on top. It also records where its corner sits, its [outline] and the
+ * area of the backdrop it paints on with its shadow ([bounds]), the area it takes in to draw
+ * itself, how its material changes the brightness of what shows through it, and the glass it
+ * lies [within]: the pieces whose content it is part of, outermost first.
  */
 internal class GlassPane(val surface: GraphicsLayer, val layer: GraphicsLayer) {
     var origin by mutableStateOf(Offset.Zero)
+    var outline by mutableStateOf(Rect.Zero)
     var bounds by mutableStateOf(Rect.Zero)
     var view by mutableStateOf(Rect.Zero)
+    var shade by mutableStateOf(GlassShade.None)
     var within by mutableStateOf(emptyList<GlassPane>())
 }
 
