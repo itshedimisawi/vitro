@@ -2,7 +2,10 @@ package io.github.itshedimisawi.vitro.sample
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,6 +41,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -60,7 +67,12 @@ private val LensGrowth = 21.dp
 private val LensRoom = 14.dp
 private const val LensZoom = 0.15f
 private const val LensMagnification = 0.88f
-private val Accent = Color(0xFF007AFF)
+private val TabIconSize = 24.dp
+private val BadgeSize = 18.dp
+private val BadgeRed = Color(0xFFFF3B30)
+
+/** One entry of a [GlassTabBar]; a [badge] above zero is shown as a count on the icon. */
+class GlassTab(val title: String, val icon: ImageVector, val badge: Int = 0)
 
 private val SettleSpring = spring<Float>(dampingRatio = 0.7f, stiffness = 400f)
 
@@ -72,7 +84,7 @@ private val SettleSpring = spring<Float>(dampingRatio = 0.7f, stiffness = 400f)
  */
 @Composable
 fun GlassTabBar(
-    titles: List<String>,
+    tabs: List<GlassTab>,
     selected: Int,
     onSelect: (Int) -> Unit,
     backdrop: GlassBackdrop,
@@ -93,9 +105,9 @@ fun GlassTabBar(
 
     fun slotUnder(x: Float): Float {
         val inset = with(density) { SelectionInset.toPx() }
-        val tab = (barSize.width - inset * 2f) / titles.size
+        val tab = (barSize.width - inset * 2f) / tabs.size
         if (tab <= 0f) return slot.value
-        return ((x - inset) / tab - 0.5f).coerceIn(0f, titles.size - 1f)
+        return ((x - inset) / tab - 0.5f).coerceIn(0f, tabs.size - 1f)
     }
 
     fun currentSlot(): Float {
@@ -111,7 +123,7 @@ fun GlassTabBar(
     }
 
     fun selection(): Rect =
-        density.selectionBounds(barSize.toSize(), titles.size, currentSlot(), touch.pressure)
+        density.selectionBounds(barSize.toSize(), tabs.size, currentSlot(), touch.pressure)
 
     // The lens is drawn outside the bar, so it applies the bar's swell and drift itself to stay on it.
     fun lensBounds(): Rect {
@@ -127,7 +139,7 @@ fun GlassTabBar(
         )
     }
 
-    LaunchedEffect(touch, titles.size) {
+    LaunchedEffect(touch, tabs.size) {
         // A quick tap can press and lift between two frames, so a release is recognised by the
         // finger having come to rest somewhere new, not by having watched it go down.
         var settledAt = touch.position
@@ -173,8 +185,8 @@ fun GlassTabBar(
             ) {
                 // Outside the selection the labels are plain; inside it they take the accent
                 // colour and are enlarged a little as the selection lifts.
-                Labels(
-                    titles = titles,
+                Tabs(
+                    tabs = tabs,
                     color = contentColor,
                     modifier = Modifier.drawWithContent {
                         clipPath(selection().capsule(), ClipOp.Difference) {
@@ -182,8 +194,8 @@ fun GlassTabBar(
                         }
                     },
                 )
-                Labels(
-                    titles = titles,
+                Tabs(
+                    tabs = tabs,
                     color = Accent,
                     modifier = Modifier.drawWithContent {
                         val bounds = selection()
@@ -243,11 +255,43 @@ private class Follow {
 }
 
 @Composable
-private fun Labels(titles: List<String>, color: Color, modifier: Modifier = Modifier) {
+private fun Tabs(tabs: List<GlassTab>, color: Color, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxSize().padding(horizontal = SelectionInset)) {
-        titles.forEach { title ->
-            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                Text(text = title, color = color, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        tabs.forEach { tab ->
+            Column(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Box {
+                    Icon(tab.icon, contentDescription = null, tint = color, modifier = Modifier.size(TabIconSize))
+                    if (tab.badge > 0) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 11.dp, y = (-5).dp)
+                                .size(BadgeSize)
+                                .background(BadgeRed, CircleShape),
+                        ) {
+                            Text(
+                                text = tab.badge.toString(),
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                lineHeight = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = tab.title,
+                    color = color,
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
             }
         }
     }

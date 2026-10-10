@@ -105,7 +105,7 @@ Glass follows the system dark theme by default. Light glass is veiled toward whi
 
 ## Sample
 
-The `sample` module shows glass over photos, over a scrolling feed, over solid colours, a screen with a slider for every property, and a set of test patterns for judging blur and refraction.
+The `sample` module shows glass over photos, on a playlist screen with toolbars, search, an alert and a tab bar, over solid colours, a screen with a slider for every property, and a set of test patterns for judging blur and refraction.
 
 ```
 ./gradlew :sample:installDebug

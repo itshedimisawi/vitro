@@ -5,11 +5,12 @@ import android.graphics.RuntimeShader
 import android.graphics.Shader
 import androidx.annotation.RequiresApi
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.IntOffset
@@ -45,27 +46,26 @@ internal class ShaderRenderer : GlassRenderer {
         )
     }
 
+    // The view covers the outline at its grown size, so a pressed element shows what is really
+    // behind its larger footprint instead of a magnified copy. Glass that shrinks what it shows
+    // also reaches past its own outline.
+    override fun DrawScope.view(scene: GlassScene): Rect {
+        val reach = 1f / scene.glass.magnification.coerceIn(MinMagnification, 1f)
+        val marginX = overhang(size.width, scene.scaleX * reach).toFloat()
+        val marginY = overhang(size.height, scene.scaleY * reach).toFloat()
+        return Rect(-marginX, -marginY, ceil(size.width) + marginX, ceil(size.height) + marginY)
+    }
+
     private fun DrawScope.drawMaterial(scene: GlassScene) {
         val glass = scene.glass
         val layer = scene.layer
-        // The layer covers the outline at its grown size, so a pressed element shows what is
-        // really behind its larger footprint instead of a magnified copy.
-        // Glass that shrinks what it shows also reaches past its own outline.
-        val reach = 1f / glass.magnification.coerceIn(MinMagnification, 1f)
-        val marginX = overhang(size.width, scene.scaleX * reach)
-        val marginY = overhang(size.height, scene.scaleY * reach)
-        val extent = IntSize(
-            ceil(size.width).toInt() + marginX * 2,
-            ceil(size.height).toInt() + marginY * 2,
-        )
-        layer.record(extent) {
-            translate(marginX - scene.origin.x, marginY - scene.origin.y) { drawBeneath(scene) }
-        }
-        layer.topLeft = IntOffset(-marginX, -marginY)
+        val view = scene.view
+        layer.record(IntSize(view.width.toInt(), view.height.toInt())) { drawView(scene) }
+        layer.topLeft = IntOffset(view.left.toInt(), view.top.toInt())
 
         val light = lightDirection(glass.lightAngle)
         val tint = glass.tint
-        material.setOutline(this, scene, Offset(marginX.toFloat(), marginY.toFloat()))
+        material.setOutline(this, scene, -view.topLeft)
         material.setFloatUniform("bevel", glass.refractionHeight.toPx())
         material.setFloatUniform("depth", glass.refractionAmount.toPx())
         material.setFloatUniform("dispersion", glass.dispersion)
@@ -101,7 +101,9 @@ internal class ShaderRenderer : GlassRenderer {
             effect = RenderEffect.createChainEffect(effect, softened)
         }
         layer.renderEffect = effect.asComposeRenderEffect()
-        drawLayer(layer)
+        // The shader has no edge of its own: left unclipped, the system works it out for every
+        // pixel that could be drawn to, which is the whole screen for each piece of glass.
+        clipRect(view.left, view.top, view.right, view.bottom) { drawLayer(layer) }
     }
 
     // Rounded up in coarse steps: a layer that changes size every frame is reallocated every frame.

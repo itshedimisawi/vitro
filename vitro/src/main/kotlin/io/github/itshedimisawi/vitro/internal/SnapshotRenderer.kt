@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
@@ -44,20 +45,21 @@ internal class SnapshotRenderer(
     private var isStale = false
     private var job: Job? = null
 
+    override fun DrawScope.view(scene: GlassScene): Rect = blurredView(scene)
+
     override fun DrawScope.render(scene: GlassScene) {
         val glass = scene.glass
         val blur = glass.blurRadius.toPx()
         val reduction = (blur / 3f).coerceIn(1f, 8f)
-        val margin = ceil(blur).toInt()
-        val width = ceil(size.width).toInt() + margin * 2
-        val height = ceil(size.height).toInt() + margin * 2
+        val view = scene.view
+        val margin = -view.left.toInt()
+        val width = view.width.toInt()
+        val height = view.height.toInt()
 
         capture.record(
             size = IntSize(ceil(width / reduction).toInt(), ceil(height / reduction).toInt()),
         ) {
-            scale(1f / reduction, 1f / reduction, pivot = Offset.Zero) {
-                translate(margin - scene.origin.x, margin - scene.origin.y) { drawBeneath(scene) }
-            }
+            scale(1f / reduction, 1f / reduction, pivot = Offset.Zero) { drawView(scene) }
         }
 
         var key = scene.revision
@@ -76,7 +78,7 @@ internal class SnapshotRenderer(
         with(painter) {
             paint(scene) {
                 if (image == null) {
-                    translate(-scene.origin.x, -scene.origin.y) { drawBeneath(scene) }
+                    translate(view.left, view.top) { drawView(scene) }
                 } else {
                     // Keeps a slightly late snapshot pinned to the content while the glass moves.
                     val drift = frameOrigin - scene.origin

@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -30,9 +31,14 @@ public class GlassBackdrop internal constructor(internal val layer: GraphicsLaye
     internal var generation: Int by mutableIntStateOf(0)
 }
 
-/** One piece of glass over a backdrop: everything it draws, and where it sits on the backdrop. */
+/**
+ * One piece of glass over a backdrop: everything it draws and where its corner sits, the area of
+ * the backdrop it paints on (shadow included) and the area it takes in to draw itself.
+ */
 internal class GlassPane(val layer: GraphicsLayer) {
     var origin by mutableStateOf(Offset.Zero)
+    var bounds by mutableStateOf(Rect.Zero)
+    var view by mutableStateOf(Rect.Zero)
 }
 
 /**

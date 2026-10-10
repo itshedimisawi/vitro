@@ -6,6 +6,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -94,6 +96,7 @@ internal class GlassNode(
     private var scene: GlassScene? = null
     private var renderer: GlassRenderer? = null
     private var pane: GlassPane? = null
+    private var beneath: State<List<GlassPane>>? = null
 
     private var placement by mutableStateOf(Offset.Unspecified)
     private var placedAt = 0L
@@ -112,6 +115,7 @@ internal class GlassNode(
             pane?.let {
                 this.backdrop.panes.remove(it)
                 backdrop.panes.add(it)
+                beneath = glassBeneath(it, backdrop)
             }
         }
         this.backdrop = backdrop
@@ -131,7 +135,10 @@ internal class GlassNode(
     override fun onAttach() {
         val context = requireGraphicsContext()
         scene = GlassScene(context.createGraphicsLayer(), backdrop.layer, glass)
-        pane = GlassPane(context.createGraphicsLayer()).also { backdrop.panes.add(it) }
+        pane = GlassPane(context.createGraphicsLayer()).also {
+            backdrop.panes.add(it)
+            beneath = glassBeneath(it, backdrop)
+        }
         renderer = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> ShaderRenderer()
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> BlurRenderer()
@@ -149,6 +156,7 @@ internal class GlassNode(
             requireGraphicsContext().releaseGraphicsLayer(it.layer)
         }
         pane = null
+        beneath = null
         placement = Offset.Unspecified
     }
 
@@ -173,8 +181,6 @@ internal class GlassNode(
 
         val position = source.localPositionOf(requireLayoutCoordinates(), Offset.Zero)
         scene.origin = position + shift
-        scene.panes = backdrop.panes
-        scene.beneath = backdrop.panes.indexOf(pane).coerceAtLeast(0)
         scene.revision = backdrop.generation
         scene.isDark = when (glass.appearance) {
             GlassAppearance.Light -> false
@@ -196,6 +202,13 @@ internal class GlassNode(
         val screen = requireDensity()
         val direction = layoutDirection
         val bounds = size
+        // Where this glass paints and what it takes in are published before anything is drawn,
+        // so each piece knows which of the others it has in view.
+        scene.view = with(renderer) { view(scene) }
+        pane.origin = position
+        pane.bounds = paintedBounds(scene).translate(scene.origin)
+        pane.view = scene.view.translate(scene.origin)
+        scene.beneath = beneath?.value.orEmpty()
         pane.layer.record {
             draw(screen, direction, drawContext.canvas, bounds, drawContext.graphicsLayer) {
                 translate(shift.x, shift.y) { with(renderer) { render(scene) } }
@@ -206,7 +219,6 @@ internal class GlassNode(
                 }
             }
         }
-        if (pane.origin != position) pane.origin = position
         drawLayer(pane.layer)
     }
 
@@ -241,6 +253,13 @@ internal class GlassNode(
     }
 
     override fun sharePointerInputWithSiblings(): Boolean = !glass.isInteractive
+
+    // Derived, so this glass is redrawn when glass in its view changes and not when any moves.
+    private fun glassBeneath(pane: GlassPane, backdrop: GlassBackdrop) = derivedStateOf {
+        val panes = backdrop.panes
+        val index = panes.indexOf(pane)
+        if (index <= 0) emptyList() else panes.subList(0, index).filter { it.bounds.overlaps(pane.view) }
+    }
 
     private fun isNightMode(): Boolean {
         val mode = currentValueOf(LocalConfiguration).uiMode and Configuration.UI_MODE_NIGHT_MASK
