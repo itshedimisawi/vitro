@@ -8,7 +8,11 @@ package io.github.itshedimisawi.vitro
  */
 public enum class GlassAppearance {
 
-    /** Follows the system dark theme setting. */
+    /**
+     * Follows the system dark theme, and gives way to the content behind the glass where that is
+     * at the far end: glass over near-black content turns dark in a light interface, and glass
+     * over near-white content turns light in a dark one.
+     */
     Automatic,
 
     /** Always renders the light material. */

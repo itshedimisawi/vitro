@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
+import io.github.itshedimisawi.vitro.internal.BackdropTone
 import io.github.itshedimisawi.vitro.internal.GlassBackdropElement
 
 /**
@@ -29,6 +30,10 @@ public class GlassBackdrop internal constructor(internal val layer: GraphicsLaye
     // Glass drawn over this backdrop, lowest first. Each piece shows through the ones above it.
     internal val panes = mutableStateListOf<GlassPane>()
     internal var generation: Int by mutableIntStateOf(0)
+
+    // Brightness of the content, kept up to date while any glass chooses its material from it.
+    internal var tone: BackdropTone? by mutableStateOf(null)
+    internal var toneWatchers: Int by mutableIntStateOf(0)
 }
 
 /**

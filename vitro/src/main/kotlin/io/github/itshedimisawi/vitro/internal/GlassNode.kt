@@ -11,8 +11,10 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.center
 import androidx.compose.ui.geometry.isSpecified
@@ -48,6 +50,8 @@ import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.GlassInteractionState
 import io.github.itshedimisawi.vitro.GlassPane
 import kotlin.math.abs
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 internal class GlassEffectElement(
@@ -55,12 +59,14 @@ internal class GlassEffectElement(
     private val glass: Glass,
     private val shape: CornerBasedShape,
     private val interaction: GlassInteractionState?,
+    private val onAppearanceChanged: ((GlassAppearance) -> Unit)?,
 ) : ModifierNodeElement<GlassNode>() {
 
-    override fun create(): GlassNode = GlassNode(backdrop, glass, shape, interaction)
+    override fun create(): GlassNode =
+        GlassNode(backdrop, glass, shape, interaction, onAppearanceChanged)
 
     override fun update(node: GlassNode) {
-        node.update(backdrop, glass, shape, interaction)
+        node.update(backdrop, glass, shape, interaction, onAppearanceChanged)
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -74,18 +80,20 @@ internal class GlassEffectElement(
             other.backdrop === backdrop &&
             other.glass == glass &&
             other.shape == shape &&
-            other.interaction === interaction
+            other.interaction === interaction &&
+            other.onAppearanceChanged === onAppearanceChanged
 
     override fun hashCode(): Int =
-        31 * (31 * (31 * backdrop.hashCode() + glass.hashCode()) + shape.hashCode()) +
-            interaction.hashCode()
+        31 * (31 * (31 * (31 * backdrop.hashCode() + glass.hashCode()) + shape.hashCode()) +
+            interaction.hashCode()) + onAppearanceChanged.hashCode()
 }
 
 internal class GlassNode(
     private var backdrop: GlassBackdrop,
-    private var glass: Glass,
+    glass: Glass,
     private var shape: CornerBasedShape,
     interaction: GlassInteractionState?,
+    private var onAppearanceChanged: ((GlassAppearance) -> Unit)?,
 ) : Modifier.Node(),
     DrawModifierNode,
     GlobalPositionAwareModifierNode,
@@ -103,23 +111,34 @@ internal class GlassNode(
     private val stretch = Animatable(Offset.Zero, Offset.VectorConverter)
     private val ownTouch = GlassInteractionState()
     private var touch = interaction ?: ownTouch
-    private var measured = Size.Zero
+    private var measured by mutableStateOf(Size.Zero)
+
+    private var glass by mutableStateOf(glass)
+    private var isNight by mutableStateOf(false)
+    private val darkness = Animatable(0f)
+    private var toning: Job? = null
+    private var isWatchingTone = false
 
     fun update(
         backdrop: GlassBackdrop,
         glass: Glass,
         shape: CornerBasedShape,
         interaction: GlassInteractionState?,
+        onAppearanceChanged: ((GlassAppearance) -> Unit)?,
     ) {
+        this.onAppearanceChanged = onAppearanceChanged
+        this.glass = glass
         if (backdrop !== this.backdrop) {
+            watchTone(false)
             pane?.let {
                 this.backdrop.panes.remove(it)
                 backdrop.panes.add(it)
                 beneath = glassBeneath(it, backdrop)
             }
+            this.backdrop = backdrop
+            pane?.let { followTone(it) }
         }
-        this.backdrop = backdrop
-        this.glass = glass
+        watchTone(glass.appearance == GlassAppearance.Automatic)
         this.shape = shape
         touch = interaction ?: ownTouch
         touch.resize(measured, requireDensity().density)
@@ -135,10 +154,13 @@ internal class GlassNode(
     override fun onAttach() {
         val context = requireGraphicsContext()
         scene = GlassScene(context.createGraphicsLayer(), backdrop.layer, glass)
+        isNight = isNightMode()
         pane = GlassPane(context.createGraphicsLayer()).also {
             backdrop.panes.add(it)
             beneath = glassBeneath(it, backdrop)
+            followTone(it)
         }
+        watchTone(glass.appearance == GlassAppearance.Automatic)
         renderer = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> ShaderRenderer()
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> BlurRenderer()
@@ -157,6 +179,7 @@ internal class GlassNode(
         }
         pane = null
         beneath = null
+        watchTone(false)
         placement = Offset.Unspecified
     }
 
@@ -182,11 +205,8 @@ internal class GlassNode(
         val position = source.localPositionOf(requireLayoutCoordinates(), Offset.Zero)
         scene.origin = position + shift
         scene.revision = backdrop.generation
-        scene.isDark = when (glass.appearance) {
-            GlassAppearance.Light -> false
-            GlassAppearance.Dark -> true
-            GlassAppearance.Automatic -> isNightMode()
-        }
+        isNight = isNightMode()
+        scene.darkness = darkness.value
         val finger = touch.position
         scene.touch = Offset(finger.x.coerceIn(0f, size.width), finger.y.coerceIn(0f, size.height))
         scene.pressure = touch.pressure.coerceAtLeast(0f)
@@ -261,6 +281,45 @@ internal class GlassNode(
         if (index <= 0) emptyList() else panes.subList(0, index).filter { it.bounds.overlaps(pane.view) }
     }
 
+    private fun watchTone(isWanted: Boolean) {
+        if (isWanted == isWatchingTone) return
+        isWatchingTone = isWanted
+        backdrop.toneWatchers += if (isWanted) 1 else -1
+    }
+
+    // Keeps the material in step with the appearance asked for and, when that is automatic, with
+    // the content under this glass. A change brought by the content is eased in; the rest is immediate.
+    private fun followTone(pane: GlassPane) {
+        val backdrop = backdrop
+        toning?.cancel()
+        toning = coroutineScope.launch {
+            var shown: GlassAppearance? = null
+            var wasSampled = false
+            snapshotFlow {
+                val brightness = when (glass.appearance) {
+                    GlassAppearance.Automatic -> backdrop.tone?.mean(Rect(pane.origin, measured)) ?: Float.NaN
+                    else -> Float.NaN
+                }
+                val wanted = when {
+                    glass.appearance == GlassAppearance.Light -> 0f
+                    glass.appearance == GlassAppearance.Dark -> 1f
+                    brightness.isNaN() -> if (isNight) 1f else 0f
+                    else -> darknessOver(brightness, isNight)
+                }
+                wanted to !brightness.isNaN()
+            }.collectLatest { (wanted, isSampled) ->
+                val appearance = if (wanted >= 0.5f) GlassAppearance.Dark else GlassAppearance.Light
+                if (appearance != shown) {
+                    shown = appearance
+                    onAppearanceChanged?.invoke(appearance)
+                }
+                val isEased = isSampled && wasSampled
+                wasSampled = isSampled
+                if (isEased) darkness.animateTo(wanted, ToneSpring) else darkness.snapTo(wanted)
+            }
+        }
+    }
+
     private fun isNightMode(): Boolean {
         val mode = currentValueOf(LocalConfiguration).uiMode and Configuration.UI_MODE_NIGHT_MASK
         return mode == Configuration.UI_MODE_NIGHT_YES
@@ -298,6 +357,7 @@ internal class GlassNode(
     }
 
     private companion object {
+        val ToneSpring = spring<Float>(dampingRatio = 1f, stiffness = 120f)
         const val StretchPerVelocity = 0.2f
         const val MaxStretch = 0.14f
     }

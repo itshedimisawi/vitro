@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -59,8 +58,13 @@ fun SampleApp() {
     var demo by rememberSaveable { mutableStateOf(Demo.Photos) }
     var isSolidLight by rememberSaveable { mutableStateOf(false) }
     val backdrop = rememberGlassBackdrop()
-    val isDark = if (demo == Demo.Solid) !isSolidLight else isSystemInDarkTheme()
-    val contentColor = if (isDark) Color.White else Ink
+    // The solid screen has its own light and dark switch; everywhere else the bar is left to
+    // pick its material from the theme and what scrolls under it.
+    val barGlass = if (demo == Demo.Solid) {
+        Glass.Regular.copy(appearance = appearanceFor(!isSolidLight))
+    } else {
+        Glass.Regular
+    }
 
     MaterialTheme(colorScheme = darkColorScheme()) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -76,8 +80,7 @@ fun SampleApp() {
                 selected = demo.ordinal,
                 onSelect = { demo = Demo.entries[it] },
                 backdrop = backdrop,
-                glass = Glass.Regular.copy(appearance = appearanceFor(isDark)),
-                contentColor = contentColor,
+                glass = barGlass,
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
             )
         }

@@ -72,7 +72,7 @@ internal class ShaderRenderer : GlassRenderer {
         material.setFloatUniform("zoom", 1f / glass.magnification.coerceAtLeast(MinMagnification))
         material.setFloatUniform("saturation", glass.saturation)
         material.setFloatUniform("brightness", glass.brightness.coerceIn(-1f, 1f))
-        material.setFloatUniform("dark", if (scene.isDark) 1f else 0f)
+        material.setFloatUniform("dark", scene.darkness)
         if (tint.isSpecified) {
             material.setFloatUniform(
                 "tint",

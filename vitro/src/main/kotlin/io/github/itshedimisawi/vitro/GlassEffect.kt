@@ -17,10 +17,14 @@ import io.github.itshedimisawi.vitro.internal.GlassEffectElement
  * @param shape Outline of the glass. Defaults to a capsule.
  * @param interaction Receives the touch on this glass when it is [interactive][Glass.interactive],
  * so other elements can follow it. Leave it out when nothing else needs to know.
+ * @param onAppearanceChanged Called with [GlassAppearance.Light] or [GlassAppearance.Dark] when
+ * the glass settles on a material, and again whenever that changes. Use it to pick a colour for
+ * the content on glass whose appearance is [GlassAppearance.Automatic].
  */
 public fun Modifier.glassEffect(
     backdrop: GlassBackdrop,
     glass: Glass = Glass.Regular,
     shape: CornerBasedShape = CircleShape,
     interaction: GlassInteractionState? = null,
-): Modifier = this then GlassEffectElement(backdrop, glass, shape, interaction)
+    onAppearanceChanged: ((GlassAppearance) -> Unit)? = null,
+): Modifier = this then GlassEffectElement(backdrop, glass, shape, interaction, onAppearanceChanged)

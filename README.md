@@ -94,7 +94,18 @@ Box(Modifier.glassEffect(backdrop, Glass.Clear.copy(magnification = 0.9f))) // s
 
 ### Light and dark
 
-Glass follows the system dark theme by default. Light glass is veiled toward white; dark glass stays close to the colours behind it and only lifts the darkest tones. Force either one with `copy(appearance = GlassAppearance.Dark)`.
+Glass follows the system dark theme by default and gives way to the content behind it at the far end: over near-black content it turns dark in a light interface, and over near-white content it turns light in a dark one, easing from one material to the other. Light glass is veiled toward white; dark glass stays close to the colours behind it and only lifts the darkest tones. Force either one with `copy(appearance = GlassAppearance.Dark)`.
+
+Content on automatic glass needs to change colour with it. `onAppearanceChanged` reports the material the glass settles on:
+
+```kotlin
+var isDark by remember { mutableStateOf(false) }
+Text(
+    text = "Edit",
+    color = if (isDark) Color.White else Color.Black,
+    modifier = Modifier.glassEffect(backdrop, onAppearanceChanged = { isDark = it == GlassAppearance.Dark }),
+)
+```
 
 ### Rules of thumb
 

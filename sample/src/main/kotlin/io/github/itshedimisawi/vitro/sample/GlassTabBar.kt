@@ -89,10 +89,11 @@ fun GlassTabBar(
     onSelect: (Int) -> Unit,
     backdrop: GlassBackdrop,
     glass: Glass,
-    contentColor: Color,
     modifier: Modifier = Modifier,
 ) {
     val touch = rememberGlassInteractionState()
+    val ink = rememberGlassInk(glass)
+    val contentColor = ink.color
     val density = LocalDensity.current
     val select by rememberUpdatedState(onSelect)
     var barSize by remember { mutableStateOf(IntSize.Zero) }
@@ -170,7 +171,7 @@ fun GlassTabBar(
                     .fillMaxWidth()
                     .height(BarHeight)
                     .onSizeChanged { barSize = it }
-                    .glassEffect(backdrop, glass.interactive(), interaction = touch)
+                    .glassEffect(backdrop, glass.interactive(), interaction = touch, onAppearanceChanged = ink::follow)
                     .drawBehind {
                         val rest = 1f - touch.pressure.coerceIn(0f, 1f)
                         val bounds = selection()
@@ -210,11 +211,11 @@ fun GlassTabBar(
 
         val isLifted by remember { derivedStateOf { touch.pressure > 0.01f } }
         if (isLifted) {
-            val lens = remember(glass.appearance) {
+            val lens = remember(ink.isDark) {
                 // Clear glass with a thin rim that takes in a little more than it covers, so
                 // the edge of the bar beneath it stays visible inside it.
                 Glass.Clear.copy(
-                    appearance = glass.appearance,
+                    appearance = appearanceFor(ink.isDark),
                     blurRadius = 0.dp,
                     refractionHeight = 3.dp,
                     dispersion = 0.1f,

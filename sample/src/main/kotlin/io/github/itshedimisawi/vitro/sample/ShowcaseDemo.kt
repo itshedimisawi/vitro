@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RemoveCircle
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -69,7 +70,6 @@ import androidx.compose.ui.unit.sp
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.glassBackdrop
-import io.github.itshedimisawi.vitro.glassEffect
 
 private val HeaderHeight = 430.dp
 private val ScreenMargin = 20.dp
@@ -98,7 +98,8 @@ private val Tracks = listOf(
 @Composable
 fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
     val isDark = isSystemInDarkTheme()
-    val glass = Glass.Regular.copy(appearance = appearanceFor(isDark))
+    // Left automatic, so each piece picks its material from what is under it.
+    val glass = Glass.Regular
     val ink = if (isDark) Color.White else Ink
     val focus = LocalFocusManager.current
     val scroll = rememberScrollState()
@@ -223,7 +224,7 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
                 contentColor = Color.White,
             )
             Spacer(Modifier.weight(1f))
-            GlassIconButton(Icons.Rounded.FavoriteBorder, "Favourite", {}, backdrop, clear, Color.White)
+            GlassIconButton(Icons.Rounded.FavoriteBorder, "Favourite", {}, backdrop, clear, contentColor = Color.White)
         }
     }
 
@@ -235,14 +236,14 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
             .padding(horizontal = ToolbarMargin, vertical = 8.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            GlassIconButton(Icons.Rounded.ArrowBackIosNew, "Back", {}, backdrop, glass, ink)
+            GlassIconButton(Icons.Rounded.ArrowBackIosNew, "Back", {}, backdrop, glass)
             Spacer(Modifier.weight(1f))
             if (!isEditing) {
-                GlassTextButton("Edit", { isEditing = true }, backdrop, glass, ink)
+                GlassTextButton("Edit", { isEditing = true }, backdrop, glass)
             }
             GlassButtonGroup(backdrop, glass) {
-                GlassGroupItem(Icons.Rounded.IosShare, "Share", ink) {}
-                GlassGroupItem(Icons.Rounded.MoreHoriz, "More", ink) { isAlertShown = true }
+                GlassGroupItem(Icons.Rounded.IosShare, "Share") {}
+                GlassGroupItem(Icons.Rounded.MoreHoriz, "More") { isAlertShown = true }
             }
             if (isEditing) {
                 GlassIconButton(
@@ -256,14 +257,13 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            GlassIconButton(Icons.Rounded.FilterList, "Filter", {}, backdrop, glass, ink)
+            GlassIconButton(Icons.Rounded.FilterList, "Filter", {}, backdrop, glass)
             GlassSearchField(
                 query = query,
                 onQueryChange = { query = it },
                 placeholder = "Search",
                 backdrop = backdrop,
                 glass = glass,
-                contentColor = ink,
                 modifier = Modifier.weight(1f),
             )
             if (query.isNotEmpty()) {
@@ -276,7 +276,6 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
                     },
                     backdrop = backdrop,
                     glass = glass,
-                    contentColor = ink,
                 )
             }
         }
@@ -309,7 +308,6 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
             onNext = { playing = (playing + 1).mod(Tracks.size) },
             backdrop = backdrop,
             glass = glass,
-            ink = ink,
         )
     }
 
@@ -324,8 +322,6 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
             },
             backdrop = backdrop,
             glass = glass,
-            ink = ink,
-            isDark = isDark,
             modifier = Modifier.align(Alignment.Center),
         )
     }
@@ -454,15 +450,11 @@ private fun Player(
     onNext: () -> Unit,
     backdrop: GlassBackdrop,
     glass: Glass,
-    ink: Color,
-) {
+) = GlassSurface(backdrop, glass.interactive(), Modifier.fillMaxWidth().height(50.dp)) {
+    val ink = LocalContentColor.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(50.dp)
-            .glassEffect(backdrop, glass.interactive())
-            .padding(start = 10.dp, end = 6.dp),
+        modifier = Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp),
     ) {
         if (track == null) {
             Box(Modifier.size(32.dp).background(ink.copy(alpha = 0.1f), RoundedCornerShape(8.dp)))
@@ -503,17 +495,15 @@ private fun Alert(
     onRemove: () -> Unit,
     backdrop: GlassBackdrop,
     glass: Glass,
-    ink: Color,
-    isDark: Boolean,
     modifier: Modifier = Modifier,
+) = GlassSurface(
+    backdrop = backdrop,
+    glass = glass.copy(blurRadius = AlertBlur),
+    modifier = modifier.width(300.dp),
+    shape = RoundedCornerShape(38.dp),
 ) {
-    Column(
-        modifier = modifier
-            .width(300.dp)
-            .glassEffect(backdrop, glass.copy(blurRadius = AlertBlur), RoundedCornerShape(38.dp))
-            .tappable {}
-            .padding(14.dp),
-    ) {
+    val ink = LocalContentColor.current
+    Column(Modifier.tappable {}.padding(14.dp)) {
         Column(Modifier.padding(start = 8.dp, top = 10.dp, end = 8.dp, bottom = 22.dp)) {
             Text("Remove This Playlist?", color = ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
@@ -524,7 +514,7 @@ private fun Alert(
                 lineHeight = 21.sp,
             )
         }
-        val quiet = ink.copy(alpha = if (isDark) 0.16f else 0.08f)
+        val quiet = ink.copy(alpha = if (ink == Color.White) 0.16f else 0.08f)
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AlertButton("Keep Playlist", Accent, Color.White, onKeep)
             AlertButton("Remove", quiet, Destructive, onRemove)

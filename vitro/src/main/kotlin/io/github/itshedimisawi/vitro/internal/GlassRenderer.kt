@@ -25,7 +25,8 @@ internal class GlassScene(
     var pressure: Float = 0f
     var glow: Float = 0f
     var revision: Int = 0
-    var isDark: Boolean = false
+    // 0 for the light material, 1 for the dark one, in between while it changes over.
+    var darkness: Float = 0f
     var scaleX: Float = 1f
     var scaleY: Float = 1f
     val radii: FloatArray = FloatArray(4)
@@ -93,14 +94,16 @@ internal const val PressGlowPerGrowth = 0.35f
 private val LumaWeights = floatArrayOf(0.2126f, 0.7152f, 0.0722f)
 
 internal fun GlassScene.shadowOpacity(): Float =
-    glass.shadowOpacity * if (isDark) DarkShadow else 1f
+    glass.shadowOpacity * (1f + (DarkShadow - 1f) * darkness)
 
 internal fun ColorMatrix.setToMaterial(scene: GlassScene) {
     val veil = scene.glass.brightness.coerceIn(0f, 1f)
-    val saturation = scene.glass.saturation * if (scene.isDark) 1f else 1f - LightWash * veil
-    val gain = if (scene.isDark) 1f + DarkGain * veil else 1f
-    val lift = if (scene.isDark) DarkLift * veil * 0.25f else LightVeil * veil
-    val fade = if (scene.isDark) 0f else LightFade * veil
+    val dark = scene.darkness
+    val light = 1f - dark
+    val saturation = scene.glass.saturation * (1f - LightWash * veil * light)
+    val gain = 1f + DarkGain * veil * dark
+    val lift = LightVeil * veil * light + DarkLift * veil * 0.25f * dark
+    val fade = LightFade * veil * light
     reset()
     for (row in 0..2) {
         for (column in 0..2) {
