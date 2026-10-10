@@ -31,11 +31,11 @@ import io.github.itshedimisawi.vitro.glassEffect
 
 private val DarkBands = listOf(
     Color(0xFF000000),
+    Color(0xFF2A611B),
+    Color(0xFF2A63F3),
+    Color(0xFFD32E21),
     Color(0xFF1C1C1E),
-    Color(0xFF0A2A66),
     Color(0xFF5E1A8A),
-    Color(0xFF8A1C1C),
-    Color(0xFF0B4D2C),
 )
 
 private val LightBands = listOf(
@@ -58,7 +58,7 @@ private val Tints = listOf(
 fun BoxScope.SolidDemo(backdrop: GlassBackdrop, isLight: Boolean, onToggle: () -> Unit) {
     val bands = if (isLight) LightBands else DarkBands
     val ink = if (isLight) Ink else Color.White
-    val regular = if (isLight) Glass.Regular else DarkRegular
+    val regular = Glass.Regular.copy(appearance = appearanceFor(!isLight))
 
     Column(Modifier.fillMaxSize().glassBackdrop(backdrop)) {
         bands.forEachIndexed { index, color ->
@@ -97,7 +97,14 @@ fun BoxScope.SolidDemo(backdrop: GlassBackdrop, isLight: Boolean, onToggle: () -
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
-        Label("Regular", ink, Modifier.glassEffect(backdrop, regular))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(40.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(44.dp).glassEffect(backdrop, regular))
+            Label("Regular", ink, Modifier.glassEffect(backdrop, regular))
+            Box(Modifier.size(44.dp).glassEffect(backdrop, regular))
+        }
         Label("Clear", ink, Modifier.glassEffect(backdrop, Glass.Clear))
         Box(
             contentAlignment = Alignment.Center,
@@ -126,6 +133,6 @@ private fun Label(text: String, color: Color, modifier: Modifier) {
         color = color,
         fontSize = 17.sp,
         fontWeight = FontWeight.SemiBold,
-        modifier = modifier.padding(horizontal = 36.dp, vertical = 18.dp),
+        modifier = modifier.padding(horizontal = 36.dp, vertical = 11.dp),
     )
 }

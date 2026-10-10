@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.itshedimisawi.vitro.Glass
+import io.github.itshedimisawi.vitro.GlassAppearance
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.glassEffect
 import io.github.itshedimisawi.vitro.rememberGlassBackdrop
@@ -44,7 +46,8 @@ class MainActivity : ComponentActivity() {
 
 val Ink = Color(0xFF111111)
 
-val DarkRegular = Glass.Regular.copy(brightness = -0.8f)
+fun appearanceFor(isDark: Boolean): GlassAppearance =
+    if (isDark) GlassAppearance.Dark else GlassAppearance.Light
 
 enum class Demo(val title: String) {
     Photos("Photos"),
@@ -58,7 +61,7 @@ fun SampleApp() {
     var demo by rememberSaveable { mutableStateOf(Demo.Photos) }
     var isSolidLight by rememberSaveable { mutableStateOf(false) }
     val backdrop = rememberGlassBackdrop()
-    val isDark = demo == Demo.Solid && !isSolidLight
+    val isDark = if (demo == Demo.Solid) !isSolidLight else isSystemInDarkTheme()
     val contentColor = if (isDark) Color.White else Ink
 
     MaterialTheme(colorScheme = darkColorScheme()) {
@@ -71,7 +74,7 @@ fun SampleApp() {
             }
             TabBar(
                 backdrop = backdrop,
-                glass = if (isDark) DarkRegular else Glass.Regular,
+                glass = Glass.Regular.copy(appearance = appearanceFor(isDark)),
                 selected = demo,
                 contentColor = contentColor,
                 onSelect = { demo = it },

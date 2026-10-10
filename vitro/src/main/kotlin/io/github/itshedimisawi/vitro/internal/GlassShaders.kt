@@ -31,7 +31,7 @@ half4 main(float2 coord) {
     float cover = clamp(0.5 - sd, 0.0, 1.0);
     float spread = max(shadow.x, 1.0);
     float soft = 1.0 - smoothstep(-spread, spread, signedDistance(p - float2(0.0, shadow.y)));
-    float contact = 2.5 * (1.0 - smoothstep(0.0, density, max(sd, 0.0)));
+    float contact = 0.6 * (1.0 - smoothstep(0.0, density, max(sd, 0.0)));
     float shade = shadow.z * max(soft, contact);
     return half4(0.0, 0.0, 0.0, min(shade, 0.3) * (1.0 - cover));
 }
@@ -44,6 +44,7 @@ uniform float depth;
 uniform float dispersion;
 uniform float saturation;
 uniform float brightness;
+uniform float dark;
 uniform float4 tint;
 uniform float dimming;
 uniform float2 light;
@@ -82,31 +83,37 @@ half4 main(float2 coord) {
     float2 dir = outward(p);
     float3 normal = float3(dir * tilt, sqrt(max(1.0 - tilt * tilt, 0.0)));
 
+    // A press clears the material and widens its colour fringes, like glass lifted off the page.
+    float fringe = dispersion * (1.0 + 3.0 * touch.z);
     float3 color = float3(
-        backdrop.eval(coord + bend(normal, IOR * (1.0 - dispersion)) * depth).r,
+        backdrop.eval(coord + bend(normal, IOR * (1.0 - fringe)) * depth).r,
         backdrop.eval(coord + bend(normal, IOR) * depth).g,
-        backdrop.eval(coord + bend(normal, IOR * (1.0 + dispersion)) * depth).b
+        backdrop.eval(coord + bend(normal, IOR * (1.0 + fringe)) * depth).b
     );
 
-    float luma = dot(color, float3(0.2126, 0.7152, 0.0722));
-    color = max(mix(float3(luma), color, saturation), 0.0);
-    color = mix(color, float3(brightness > 0.0 ? 1.0 : 0.0), abs(brightness));
+    float3 weights = float3(0.2126, 0.7152, 0.0722);
+    float vivid = dark > 0.5 ? mix(1.0, saturation, 0.3) : saturation;
+    color = max(mix(float3(dot(color, weights)), color, vivid), 0.0);
+    float veil = brightness * (1.0 - 0.6 * touch.z);
+    if (veil < 0.0) {
+        color *= 1.0 + veil;
+    } else if (dark > 0.5) {
+        color = color * (1.0 + 0.14 * veil) + 0.19 * veil * pow(1.0 - dot(color, weights), 6.0);
+    } else {
+        color = mix(color, float3(1.0), veil);
+    }
     color = mix(color, tint.rgb, tint.a);
     color *= 1.0 - dimming;
 
     float facing = dot(dir, light);
-    float rim = 1.0 - clamp(inset / (2.0 * density), 0.0, 1.0);
-    rim *= rim;
-    float edge = rim * (0.1 + 0.4 * facing * facing);
-
-    float3 halfway = normalize(float3(light * 0.6, 1.8));
-    float sheen = pow(max(dot(normal, halfway), 0.0), 40.0) * tilt;
-    float glow = tilt * tilt * 0.04;
+    float rim = 1.0 - smoothstep(0.75 * density, 1.25 * density, inset);
+    float edge = rim * (0.04 + 0.96 * smoothstep(0.05, 0.65, abs(facing))) * highlight;
 
     float2 reach = p - touch.xy;
     float spot = touch.z * exp(-dot(reach, reach) / max(halfSize.y * halfSize.y * 6.0, 1.0));
 
-    color += highlight * (edge + sheen * 0.12 + glow) + spot * 0.12 + touch.z * 0.03;
+    color = color * (1.0 + 0.8 * edge) + 0.04 * edge;
+    color += spot * 0.12 + touch.z * 0.03;
     color = clamp(color, 0.0, 1.0);
 
     return half4(color * cover, cover);

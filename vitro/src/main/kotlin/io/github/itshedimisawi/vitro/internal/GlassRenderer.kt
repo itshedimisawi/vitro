@@ -14,6 +14,7 @@ internal class GlassScene(
     var touch: Offset = Offset.Zero
     var pressure: Float = 0f
     var revision: Int = 0
+    var isDark: Boolean = false
     var scaleX: Float = 1f
     var scaleY: Float = 1f
     val radii: FloatArray = FloatArray(4)

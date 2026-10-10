@@ -61,6 +61,7 @@ internal class ShaderRenderer : GlassRenderer {
         material.setFloatUniform("dispersion", glass.dispersion)
         material.setFloatUniform("saturation", glass.saturation)
         material.setFloatUniform("brightness", glass.brightness.coerceIn(-1f, 1f))
+        material.setFloatUniform("dark", if (scene.isDark) 1f else 0f)
         if (tint.isSpecified) {
             material.setFloatUniform(
                 "tint",

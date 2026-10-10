@@ -19,8 +19,10 @@ import androidx.compose.ui.unit.dp
  * prism-like fringe.
  * @property saturation Colour intensity of content seen through the glass, where 1 leaves it
  * unchanged.
- * @property brightness Luminosity shift of content seen through the glass, from -1 (black) to
- * 1 (white).
+ * @property brightness How strongly the luminosity of content seen through the glass is adjusted
+ * for legibility, from 0 to 1. Its effect depends on [appearance]. Negative values darken toward
+ * black in either appearance.
+ * @property appearance Whether the material renders for a light or a dark interface.
  * @property tint Colour blended into the material, with its alpha setting the strength.
  * [Color.Unspecified] leaves the glass untinted.
  * @property dimming Opacity of the dark layer placed behind the glass, from 0 to 1.
@@ -39,6 +41,7 @@ public class Glass private constructor(
     public val dispersion: Float,
     public val saturation: Float,
     public val brightness: Float,
+    public val appearance: GlassAppearance,
     public val tint: Color,
     public val dimming: Float,
     public val lightAngle: Float,
@@ -82,6 +85,7 @@ public class Glass private constructor(
         dispersion: Float = this.dispersion,
         saturation: Float = this.saturation,
         brightness: Float = this.brightness,
+        appearance: GlassAppearance = this.appearance,
         tint: Color = this.tint,
         dimming: Float = this.dimming,
         lightAngle: Float = this.lightAngle,
@@ -97,6 +101,7 @@ public class Glass private constructor(
         dispersion = dispersion,
         saturation = saturation,
         brightness = brightness,
+        appearance = appearance,
         tint = tint,
         dimming = dimming,
         lightAngle = lightAngle,
@@ -116,6 +121,7 @@ public class Glass private constructor(
             dispersion == other.dispersion &&
             saturation == other.saturation &&
             brightness == other.brightness &&
+            appearance == other.appearance &&
             tint == other.tint &&
             dimming == other.dimming &&
             lightAngle == other.lightAngle &&
@@ -133,6 +139,7 @@ public class Glass private constructor(
         result = 31 * result + dispersion.hashCode()
         result = 31 * result + saturation.hashCode()
         result = 31 * result + brightness.hashCode()
+        result = 31 * result + appearance.hashCode()
         result = 31 * result + tint.hashCode()
         result = 31 * result + dimming.hashCode()
         result = 31 * result + lightAngle.hashCode()
@@ -147,7 +154,8 @@ public class Glass private constructor(
     override fun toString(): String =
         "Glass(blurRadius=$blurRadius, refractionHeight=$refractionHeight, " +
             "refractionAmount=$refractionAmount, dispersion=$dispersion, " +
-            "saturation=$saturation, brightness=$brightness, tint=$tint, dimming=$dimming, " +
+            "saturation=$saturation, brightness=$brightness, appearance=$appearance, " +
+            "tint=$tint, dimming=$dimming, " +
             "lightAngle=$lightAngle, highlightIntensity=$highlightIntensity, " +
             "shadowRadius=$shadowRadius, shadowOffset=$shadowOffset, " +
             "shadowOpacity=$shadowOpacity, isInteractive=$isInteractive)"
@@ -155,7 +163,7 @@ public class Glass private constructor(
     public companion object {
 
         /**
-         * The standard material. Blurs and lifts the luminosity of what is behind it so text and
+         * The standard material. Blurs and adjusts the luminosity of what is behind it so text and
          * symbols placed on top stay legible over any content.
          */
         public val Regular: Glass = Glass(
@@ -165,13 +173,14 @@ public class Glass private constructor(
             dispersion = 0.03f,
             saturation = 1.4f,
             brightness = 0.5f,
+            appearance = GlassAppearance.Automatic,
             tint = Color.Unspecified,
             dimming = 0f,
-            lightAngle = -30f,
+            lightAngle = -45f,
             highlightIntensity = 1f,
             shadowRadius = 20.dp,
             shadowOffset = 6.dp,
-            shadowOpacity = 0.08f,
+            shadowOpacity = 0.06f,
             isInteractive = false,
         )
 

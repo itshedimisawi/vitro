@@ -1,5 +1,6 @@
 package io.github.itshedimisawi.vitro.internal
 
+import android.content.res.Configuration
 import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
@@ -18,7 +19,9 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.PointerInputModifierNode
@@ -27,10 +30,12 @@ import androidx.compose.ui.node.requireDensity
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.platform.InspectorInfo
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.itshedimisawi.vitro.Glass
+import io.github.itshedimisawi.vitro.GlassAppearance
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import kotlin.math.abs
 import kotlinx.coroutines.launch
@@ -70,7 +75,8 @@ internal class GlassNode(
 ) : Modifier.Node(),
     DrawModifierNode,
     GlobalPositionAwareModifierNode,
-    PointerInputModifierNode {
+    PointerInputModifierNode,
+    CompositionLocalConsumerModifierNode {
 
     private var scene: GlassScene? = null
     private var renderer: GlassRenderer? = null
@@ -123,6 +129,11 @@ internal class GlassNode(
         scene.glass = glass
         scene.origin = source.localPositionOf(requireLayoutCoordinates(), Offset.Zero)
         scene.revision = backdrop.generation
+        scene.isDark = when (glass.appearance) {
+            GlassAppearance.Light -> false
+            GlassAppearance.Dark -> true
+            GlassAppearance.Automatic -> isNightMode()
+        }
         scene.touch = touch
         scene.pressure = pressure.value
         resolveRadii(scene.radii)
@@ -167,6 +178,11 @@ internal class GlassNode(
 
     override fun sharePointerInputWithSiblings(): Boolean = !glass.isInteractive
 
+    private fun isNightMode(): Boolean {
+        val mode = currentValueOf(LocalConfiguration).uiMode and Configuration.UI_MODE_NIGHT_MASK
+        return mode == Configuration.UI_MODE_NIGHT_YES
+    }
+
     private fun press(target: Float) {
         coroutineScope.launch {
             pressure.animateTo(target, spring(dampingRatio = 0.55f, stiffness = 320f))
@@ -207,7 +223,7 @@ internal class GlassNode(
     }
 
     private companion object {
-        val PressGrowth = 10.dp
+        val PressGrowth = 14.dp
         const val StretchPerVelocity = 0.2f
         const val MaxStretch = 0.14f
     }

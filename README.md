@@ -65,7 +65,11 @@ Modifier.glassEffect(
 | `tint(color)` | Colours the material to give a control prominence. |
 | `interactive()` | Glass grows under a press, lights up beneath the finger and stretches while it moves. |
 | `dimmed(opacity)` | Adds a dark layer behind the glass, 35% by default. |
-| `copy(...)` | Sets any optical property: `blurRadius`, `refractionHeight`, `refractionAmount`, `dispersion`, `saturation`, `brightness`, `lightAngle`, `highlightIntensity` and the shadow. |
+| `copy(...)` | Sets any optical property: `blurRadius`, `refractionHeight`, `refractionAmount`, `dispersion`, `saturation`, `brightness`, `appearance`, `lightAngle`, `highlightIntensity` and the shadow. |
+
+### Light and dark
+
+Glass follows the system dark theme by default. Light glass is veiled toward white; dark glass stays close to the colours behind it and only lifts the darkest tones. Force either one with `copy(appearance = GlassAppearance.Dark)`.
 
 ### Rules of thumb
 

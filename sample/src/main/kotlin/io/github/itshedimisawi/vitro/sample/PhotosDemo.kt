@@ -1,6 +1,7 @@
 package io.github.itshedimisawi.vitro.sample
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,7 +53,7 @@ fun BoxScope.PhotosDemo(backdrop: GlassBackdrop) {
 
     Text(
         text = "Swipe photos, drag the glass",
-        color = Ink,
+        color = if (isSystemInDarkTheme()) Color.White else Ink,
         fontSize = 15.sp,
         fontWeight = FontWeight.Medium,
         modifier = Modifier

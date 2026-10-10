@@ -53,9 +53,11 @@ internal class FallbackPainter {
                 drawBackdrop()
             }
 
-            val brightness = glass.brightness.coerceIn(-1f, 1f)
-            if (brightness != 0f) {
-                drawRect(if (brightness > 0f) Color.White else Color.Black, alpha = abs(brightness))
+            val veil = glass.brightness.coerceIn(-1f, 1f) * (1f - 0.6f * scene.pressure)
+            when {
+                veil < 0f -> drawRect(Color.Black, alpha = -veil)
+                scene.isDark -> drawRect(Color.White, alpha = veil * DarkVeil)
+                veil > 0f -> drawRect(Color.White, alpha = veil)
             }
             if (glass.tint.isSpecified) {
                 drawRect(glass.tint, alpha = glass.tint.alpha * TintStrength)
@@ -78,13 +80,15 @@ internal class FallbackPainter {
             drawPath(
                 path = outline,
                 brush = Brush.linearGradient(
-                    0f to glow(0.5f * strength),
-                    0.5f to glow(0.1f * strength),
-                    1f to glow(0.5f * strength),
+                    0f to glow(0.4f * strength),
+                    0.3f to glow(0.3f * strength),
+                    0.5f to glow(0.02f * strength),
+                    0.7f to glow(0.3f * strength),
+                    1f to glow(0.4f * strength),
                     start = lit,
                     end = far,
                 ),
-                style = Stroke(width = 4f * density),
+                style = Stroke(width = 2.3f * density),
             )
             if (bevel > 0f) {
                 drawPath(
@@ -165,5 +169,6 @@ internal class FallbackPainter {
     private companion object {
         const val Rings = 5
         const val ShadowSteps = 10
+        const val DarkVeil = 0.12f
     }
 }
