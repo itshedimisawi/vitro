@@ -5,4 +5,5 @@ build/
 local.properties
 *.iml
 .DS_Store
-
+
+HANDOVER.md

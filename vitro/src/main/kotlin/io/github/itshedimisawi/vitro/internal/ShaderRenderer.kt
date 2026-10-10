@@ -9,12 +9,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import kotlin.math.ceil
+import kotlin.math.max
 
 @RequiresApi(33)
 internal class ShaderRenderer : GlassRenderer {
@@ -24,10 +25,8 @@ internal class ShaderRenderer : GlassRenderer {
     private val shadowBrush = ShaderBrush(shadow)
 
     override fun DrawScope.render(scene: GlassScene) {
-        scale(scene.scaleX, scene.scaleY) {
-            drawShadow(scene)
-            drawMaterial(scene)
-        }
+        drawShadow(scene)
+        drawMaterial(scene)
     }
 
     private fun DrawScope.drawShadow(scene: GlassScene) {
@@ -36,8 +35,8 @@ internal class ShaderRenderer : GlassRenderer {
         val opacity = scene.shadowOpacity()
         if (opacity <= 0f || radius <= 0f) return
         val offset = glass.shadowOffset.toPx()
-        val spread = ceil(radius + offset)
-        shadow.setOutline(this, scene)
+        val spread = ceil(radius + offset + max(overhang(size.width, scene.scaleX), overhang(size.height, scene.scaleY)))
+        shadow.setOutline(this, scene, Offset.Zero)
         shadow.setFloatUniform("shadow", radius, offset, opacity)
         drawRect(
             brush = shadowBrush,
@@ -49,14 +48,22 @@ internal class ShaderRenderer : GlassRenderer {
     private fun DrawScope.drawMaterial(scene: GlassScene) {
         val glass = scene.glass
         val layer = scene.layer
-        layer.record {
-            translate(-scene.origin.x, -scene.origin.y) { drawLayer(scene.backdrop) }
+        // The layer covers the outline at its grown size, so a pressed element shows what is
+        // really behind its larger footprint instead of a magnified copy.
+        val marginX = overhang(size.width, scene.scaleX)
+        val marginY = overhang(size.height, scene.scaleY)
+        val extent = IntSize(
+            ceil(size.width).toInt() + marginX * 2,
+            ceil(size.height).toInt() + marginY * 2,
+        )
+        layer.record(extent) {
+            translate(marginX - scene.origin.x, marginY - scene.origin.y) { drawLayer(scene.backdrop) }
         }
-        layer.topLeft = IntOffset.Zero
+        layer.topLeft = IntOffset(-marginX, -marginY)
 
         val light = lightDirection(glass.lightAngle)
         val tint = glass.tint
-        material.setOutline(this, scene)
+        material.setOutline(this, scene, Offset(marginX.toFloat(), marginY.toFloat()))
         material.setFloatUniform("bevel", glass.refractionHeight.toPx())
         material.setFloatUniform("depth", glass.refractionAmount.toPx())
         material.setFloatUniform("dispersion", glass.dispersion)
@@ -81,8 +88,8 @@ internal class ShaderRenderer : GlassRenderer {
             "touch",
             scene.touch.x - size.width / 2f,
             scene.touch.y - size.height / 2f,
-            scene.pressure,
         )
+        material.setFloatUniform("glow", scene.glow)
 
         val blur = glass.blurRadius.toPx()
         var effect = RenderEffect.createRuntimeShaderEffect(material, GlassShaders.Backdrop)
@@ -94,8 +101,12 @@ internal class ShaderRenderer : GlassRenderer {
         drawLayer(layer)
     }
 
-    private fun RuntimeShader.setOutline(scope: DrawScope, scene: GlassScene) {
-        setFloatUniform("center", scope.size.width / 2f, scope.size.height / 2f)
+    private fun overhang(length: Float, scale: Float): Int =
+        ceil(max(length * (scale - 1f) / 2f, 0f)).toInt()
+
+    private fun RuntimeShader.setOutline(scope: DrawScope, scene: GlassScene, inset: Offset) {
+        setFloatUniform("center", inset.x + scope.size.width / 2f, inset.y + scope.size.height / 2f)
+        setFloatUniform("grow", scene.scaleX, scene.scaleY)
         setFloatUniform("halfSize", scope.size.width / 2f, scope.size.height / 2f)
         setFloatUniform("radii", scene.radii)
         setFloatUniform("density", scope.density)

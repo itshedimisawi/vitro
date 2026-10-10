@@ -14,6 +14,7 @@ internal class GlassScene(
     var origin: Offset = Offset.Zero
     var touch: Offset = Offset.Zero
     var pressure: Float = 0f
+    var glow: Float = 0f
     var revision: Int = 0
     var isDark: Boolean = false
     var scaleX: Float = 1f
@@ -29,11 +30,18 @@ internal interface GlassRenderer {
 }
 
 internal const val LightVeil = 1.32f
-internal const val DarkGain = 0.14f
+internal const val LightFade = 1.34f
+internal const val LightWash = 0.58f
+internal const val DarkGain = 0.08f
 internal const val DarkLift = 0.19f
-internal const val DarkShadow = 0.4f
-internal const val PressClearing = 0.6f
-internal const val PressDispersion = 0.06f
+internal const val DarkShade = 1f
+internal const val DarkKnee = 0.33f
+internal const val DarkShadow = 0.15f
+internal const val DarkRimGain = 0.35f
+internal const val DarkRimLift = 0.12f
+internal const val LightRim = 0.91f
+internal const val PressGlow = 0.05f
+internal const val PressGlowPerGrowth = 0.35f
 
 private val LumaWeights = floatArrayOf(0.2126f, 0.7152f, 0.0722f)
 
@@ -41,11 +49,11 @@ internal fun GlassScene.shadowOpacity(): Float =
     glass.shadowOpacity * if (isDark) DarkShadow else 1f
 
 internal fun ColorMatrix.setToMaterial(scene: GlassScene) {
-    val saturation = scene.glass.saturation
-    val veil = (scene.glass.brightness * (1f - PressClearing * scene.pressure)).coerceIn(0f, 1f)
+    val veil = scene.glass.brightness.coerceIn(0f, 1f)
+    val saturation = scene.glass.saturation * if (scene.isDark) 1f else 1f - LightWash * veil
     val gain = if (scene.isDark) 1f + DarkGain * veil else 1f
     val lift = if (scene.isDark) DarkLift * veil * 0.25f else LightVeil * veil
-    val fade = if (scene.isDark) 0f else lift
+    val fade = if (scene.isDark) 0f else LightFade * veil
     reset()
     for (row in 0..2) {
         for (column in 0..2) {

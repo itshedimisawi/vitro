@@ -43,17 +43,29 @@ private val PatternImages = listOf(
 private val PatternColours = listOf(
     Color(0xFFFFFFFF),
     Color(0xFF808080),
-    Color(0xFFF09A37),
-    Color(0xFFF7CE45),
-    Color(0xFF2A611B),
-    Color(0xFF2A63F3),
+    Color(0xFFFF9500),
+    Color(0xFFFFCC00),
+    Color(0xFFFF3B30),
+    Color(0xFF34C759),
+    Color(0xFF007AFF),
+    Color(0xFFFFC8D2),
+    Color(0xFFE8E8E8),
+    Color(0xFFAAAAAA),
+    Color(0xFF5A5A5A),
+    Color(0xFF2E2E2E),
     Color(0xFF000000),
+    Color(0xFF056307),
+    Color(0xFF0165FC),
 )
+
+// Colours from this position on are the ones iOS puts dark glass over in a light interface.
+// After the last colour the whole list repeats under dark glass.
+private const val FirstDarkColour = 11
 
 @Composable
 fun BoxScope.PatternsDemo(backdrop: GlassBackdrop) {
     var index by rememberSaveable { mutableIntStateOf(0) }
-    val count = PatternImages.size + PatternColours.size
+    val count = PatternImages.size + PatternColours.size * 2
     val advance = Modifier.clickable(
         interactionSource = remember { MutableInteractionSource() },
         indication = null,
@@ -74,12 +86,15 @@ fun BoxScope.PatternsDemo(backdrop: GlassBackdrop) {
             Modifier
                 .fillMaxSize()
                 .glassBackdrop(backdrop)
-                .background(PatternColours[index - PatternImages.size])
+                .background(PatternColours[(index - PatternImages.size) % PatternColours.size])
                 .then(advance),
         )
     }
 
-    val glass = Glass.Regular.copy(appearance = GlassAppearance.Light)
+    val isDark = index - PatternImages.size >= FirstDarkColour
+    val glass = Glass.Regular
+        .copy(appearance = if (isDark) GlassAppearance.Dark else GlassAppearance.Light)
+        .interactive()
     Box(Modifier.offset(x = 16.dp, y = 59.dp).size(44.dp).glassEffect(backdrop, glass))
     Box(Modifier.offset(x = 333.33.dp, y = 59.dp).size(44.dp).glassEffect(backdrop, glass))
 }

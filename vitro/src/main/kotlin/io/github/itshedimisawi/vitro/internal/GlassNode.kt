@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -38,6 +39,7 @@ import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassAppearance
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import kotlin.math.abs
+import kotlin.math.sqrt
 import kotlinx.coroutines.launch
 
 internal class GlassEffectElement(
@@ -86,6 +88,8 @@ internal class GlassNode(
     private var touch by mutableStateOf(Offset.Zero)
     private val pressure = Animatable(0f)
     private val stretch = Animatable(Offset.Zero, Offset.VectorConverter)
+    private var pressedAt = Offset.Unspecified
+    private val drag = Animatable(Offset.Zero, Offset.VectorConverter)
 
     fun update(backdrop: GlassBackdrop, glass: Glass, shape: CornerBasedShape) {
         this.backdrop = backdrop
@@ -127,23 +131,39 @@ internal class GlassNode(
         placement
         scene.backdrop = backdrop.layer
         scene.glass = glass
-        scene.origin = source.localPositionOf(requireLayoutCoordinates(), Offset.Zero)
+        // Held glass drifts toward the finger and stretches along the pull, less so the larger it is.
+        val reach = drag.value
+        val distance = reach.getDistance()
+        val lightness = (ReferenceSize.toPx() / size.maxDimension).coerceAtMost(1.5f)
+        val shift = reach * (PullShift * lightness)
+        val tug = if (distance > 0f) {
+            val amount = (distance / density * PullStretch * sqrt(lightness)).coerceAtMost(MaxPull)
+            amount * (reach.x * reach.x - reach.y * reach.y) / (distance * distance)
+        } else {
+            0f
+        }
+
+        scene.origin = source.localPositionOf(requireLayoutCoordinates(), Offset.Zero) + shift
         scene.revision = backdrop.generation
         scene.isDark = when (glass.appearance) {
             GlassAppearance.Light -> false
             GlassAppearance.Dark -> true
             GlassAppearance.Automatic -> isNightMode()
         }
-        scene.touch = touch
-        scene.pressure = pressure.value
+        scene.touch = Offset(touch.x.coerceIn(0f, size.width), touch.y.coerceIn(0f, size.height))
+        scene.pressure = pressure.value.coerceAtLeast(0f)
+        val growth = PressGrowth.toPx() / size.maxDimension
+        scene.glow = scene.pressure * (PressGlow + PressGlowPerGrowth * growth)
         resolveRadii(scene.radii)
 
-        val swell = pressure.value * PressGrowth.toPx() / size.maxDimension
+        val swell = pressure.value * growth
         val pull = stretch.value
-        scene.scaleX = 1f + swell + pull.x - pull.y * 0.5f
-        scene.scaleY = 1f + swell + pull.y - pull.x * 0.5f
-        with(renderer) { render(scene) }
-        scale(scene.scaleX, scene.scaleY) { this@draw.drawContent() }
+        scene.scaleX = (1f + swell + pull.x - pull.y * 0.5f) * (1f + tug)
+        scene.scaleY = (1f + swell + pull.y - pull.x * 0.5f) * (1f - tug)
+        translate(shift.x, shift.y) {
+            with(renderer) { render(scene) }
+            scale(scene.scaleX, scene.scaleY) { this@draw.drawContent() }
+        }
     }
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
@@ -167,13 +187,20 @@ internal class GlassNode(
         val change = pointerEvent.changes.firstOrNull() ?: return
         touch = change.position
         when (pointerEvent.type) {
-            PointerEventType.Press -> press(1f)
+            PointerEventType.Press -> {
+                pressedAt = change.position
+                press(1f)
+            }
+            PointerEventType.Move -> if (pressedAt.isSpecified) {
+                val reach = change.position - pressedAt
+                coroutineScope.launch { drag.snapTo(reach) }
+            }
             PointerEventType.Release -> press(0f)
         }
     }
 
     override fun onCancelPointerInput() {
-        if (pressure.targetValue != 0f) press(0f)
+        if (pressure.targetValue != 0f || pressedAt.isSpecified) press(0f)
     }
 
     override fun sharePointerInputWithSiblings(): Boolean = !glass.isInteractive
@@ -184,8 +211,14 @@ internal class GlassNode(
     }
 
     private fun press(target: Float) {
+        if (target == 0f) {
+            pressedAt = Offset.Unspecified
+            coroutineScope.launch { drag.animateTo(Offset.Zero, ReturnSpring) }
+        }
         coroutineScope.launch {
-            pressure.animateTo(target, spring(dampingRatio = 0.55f, stiffness = 320f))
+            // Pressing snaps up quickly; letting go rebounds past the resting size once.
+            val motion = if (target > 0f) PressSpring else ReleaseSpring
+            pressure.animateTo(target, motion)
         }
     }
 
@@ -206,6 +239,7 @@ internal class GlassNode(
         coroutineScope.launch {
             pressure.snapTo(0f)
             stretch.snapTo(Offset.Zero)
+            drag.snapTo(Offset.Zero)
         }
     }
 
@@ -223,7 +257,14 @@ internal class GlassNode(
     }
 
     private companion object {
-        val PressGrowth = 14.dp
+        val PressGrowth = 17.dp
+        val PressSpring = spring<Float>(dampingRatio = 0.7f, stiffness = 850f)
+        val ReleaseSpring = spring<Float>(dampingRatio = 0.4f, stiffness = 300f)
+        val ReturnSpring = spring<Offset>(dampingRatio = 0.4f, stiffness = 300f)
+        val ReferenceSize = 44.dp
+        const val PullShift = 0.036f
+        const val PullStretch = 0.00033f
+        const val MaxPull = 0.3f
         const val StretchPerVelocity = 0.2f
         const val MaxStretch = 0.14f
     }

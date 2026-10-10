@@ -31,9 +31,9 @@ import io.github.itshedimisawi.vitro.glassEffect
 
 private val DarkBands = listOf(
     Color(0xFF000000),
-    Color(0xFF2A611B),
-    Color(0xFF2A63F3),
-    Color(0xFFD32E21),
+    Color(0xFF056307),
+    Color(0xFF0165FC),
+    Color(0xFFE60406),
     Color(0xFF1C1C1E),
     Color(0xFF5E1A8A),
 )

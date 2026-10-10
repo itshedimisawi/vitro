@@ -36,7 +36,8 @@ internal class FallbackPainter {
             if (bevel > 0f && depth > 0f) {
                 // Each ring redraws the backdrop stretched outward, stepping the lens curve.
                 for (step in 0 until Rings) {
-                    val shift = depth * (1f - (step + 0.5f) / Rings)
+                    val slope = 1f - (step + 0.5f) / Rings
+                    val shift = depth * slope * slope * slope
                     ring.trace(this, scene.radii, bevel * step / Rings)
                     clipPath(ring) {
                         scale(

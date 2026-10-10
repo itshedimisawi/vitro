@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
  *
  * @property blurRadius How strongly content behind the glass is blurred.
  * @property refractionHeight Width of the curved rim, measured inward from the edge, where content
- * is bent. The area further inside stays flat and undistorted.
+ * is bent. The bend eases off toward the inside, and the area beyond it stays undistorted.
  * @property refractionAmount How far the rim displaces the content it bends. Zero disables lensing.
  * @property dispersion Colour separation along the rim at rest, where 0 is none and around 0.1 is
  * a strong prism-like fringe. Interactive glass adds its own fringe while pressed.
@@ -167,9 +167,9 @@ public class Glass private constructor(
          * symbols placed on top stay legible over any content.
          */
         public val Regular: Glass = Glass(
-            blurRadius = 4.dp,
-            refractionHeight = 6.dp,
-            refractionAmount = 22.dp,
+            blurRadius = 2.5.dp,
+            refractionHeight = 12.dp,
+            refractionAmount = 26.dp,
             dispersion = 0f,
             saturation = 1.1f,
             brightness = 0.5f,
@@ -180,7 +180,7 @@ public class Glass private constructor(
             highlightIntensity = 1f,
             shadowRadius = 30.dp,
             shadowOffset = 8.dp,
-            shadowOpacity = 0.1f,
+            shadowOpacity = 0.16f,
             isInteractive = false,
         )
 
