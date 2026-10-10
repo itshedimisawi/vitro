@@ -107,6 +107,9 @@ fun BoxScope.PlaygroundDemo(backdrop: GlassBackdrop) {
             glass = glass.copy(refractionAmount = it.dp)
         }
         Control("Dispersion", glass.dispersion, 0f..0.2f) { glass = glass.copy(dispersion = it) }
+        Control("Magnification", glass.magnification, 0.6f..1.4f) {
+            glass = glass.copy(magnification = it)
+        }
         Control("Saturation", glass.saturation, 0f..2.5f) { glass = glass.copy(saturation = it) }
         Control("Brightness", glass.brightness, -0.6f..0.6f) {
             glass = glass.copy(brightness = it)

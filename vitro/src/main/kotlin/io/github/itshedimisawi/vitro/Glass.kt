@@ -17,6 +17,9 @@ import androidx.compose.ui.unit.dp
  * @property refractionAmount How far the rim displaces the content it bends. Zero disables lensing.
  * @property dispersion Colour separation along the rim at rest, where 0 is none and around 0.1 is
  * a strong prism-like fringe. Interactive glass adds its own fringe while pressed.
+ * @property magnification Size of the content seen through the glass, scaled about its centre. 1
+ * shows it at its true size; below 1 shrinks it, so the glass takes in a wider area, edges of what
+ * lies under it included; above 1 enlarges it.
  * @property saturation Colour intensity of content seen through the glass, where 1 leaves it
  * unchanged.
  * @property brightness How strongly the luminosity of content seen through the glass is adjusted
@@ -39,6 +42,7 @@ public class Glass private constructor(
     public val refractionHeight: Dp,
     public val refractionAmount: Dp,
     public val dispersion: Float,
+    public val magnification: Float,
     public val saturation: Float,
     public val brightness: Float,
     public val appearance: GlassAppearance,
@@ -83,6 +87,7 @@ public class Glass private constructor(
         refractionHeight: Dp = this.refractionHeight,
         refractionAmount: Dp = this.refractionAmount,
         dispersion: Float = this.dispersion,
+        magnification: Float = this.magnification,
         saturation: Float = this.saturation,
         brightness: Float = this.brightness,
         appearance: GlassAppearance = this.appearance,
@@ -99,6 +104,7 @@ public class Glass private constructor(
         refractionHeight = refractionHeight,
         refractionAmount = refractionAmount,
         dispersion = dispersion,
+        magnification = magnification,
         saturation = saturation,
         brightness = brightness,
         appearance = appearance,
@@ -119,6 +125,7 @@ public class Glass private constructor(
             refractionHeight == other.refractionHeight &&
             refractionAmount == other.refractionAmount &&
             dispersion == other.dispersion &&
+            magnification == other.magnification &&
             saturation == other.saturation &&
             brightness == other.brightness &&
             appearance == other.appearance &&
@@ -137,6 +144,7 @@ public class Glass private constructor(
         result = 31 * result + refractionHeight.hashCode()
         result = 31 * result + refractionAmount.hashCode()
         result = 31 * result + dispersion.hashCode()
+        result = 31 * result + magnification.hashCode()
         result = 31 * result + saturation.hashCode()
         result = 31 * result + brightness.hashCode()
         result = 31 * result + appearance.hashCode()
@@ -154,6 +162,7 @@ public class Glass private constructor(
     override fun toString(): String =
         "Glass(blurRadius=$blurRadius, refractionHeight=$refractionHeight, " +
             "refractionAmount=$refractionAmount, dispersion=$dispersion, " +
+            "magnification=$magnification, " +
             "saturation=$saturation, brightness=$brightness, appearance=$appearance, " +
             "tint=$tint, dimming=$dimming, " +
             "lightAngle=$lightAngle, highlightIntensity=$highlightIntensity, " +
@@ -171,6 +180,7 @@ public class Glass private constructor(
             refractionHeight = 12.dp,
             refractionAmount = 26.dp,
             dispersion = 0f,
+            magnification = 1f,
             saturation = 1.1f,
             brightness = 0.5f,
             appearance = GlassAppearance.Automatic,

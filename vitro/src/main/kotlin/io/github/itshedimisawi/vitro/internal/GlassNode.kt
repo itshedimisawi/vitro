@@ -11,10 +11,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.center
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -24,6 +28,7 @@ import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.GlobalPositionAwareModifierNode
+import androidx.compose.ui.node.LayoutAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.PointerInputModifierNode
 import androidx.compose.ui.node.invalidateDraw
@@ -34,24 +39,26 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassAppearance
 import io.github.itshedimisawi.vitro.GlassBackdrop
+import io.github.itshedimisawi.vitro.GlassInteractionState
+import io.github.itshedimisawi.vitro.GlassPane
 import kotlin.math.abs
-import kotlin.math.sqrt
 import kotlinx.coroutines.launch
 
 internal class GlassEffectElement(
     private val backdrop: GlassBackdrop,
     private val glass: Glass,
     private val shape: CornerBasedShape,
+    private val interaction: GlassInteractionState?,
 ) : ModifierNodeElement<GlassNode>() {
 
-    override fun create(): GlassNode = GlassNode(backdrop, glass, shape)
+    override fun create(): GlassNode = GlassNode(backdrop, glass, shape, interaction)
 
     override fun update(node: GlassNode) {
-        node.update(backdrop, glass, shape)
+        node.update(backdrop, glass, shape, interaction)
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -64,44 +71,67 @@ internal class GlassEffectElement(
         other is GlassEffectElement &&
             other.backdrop === backdrop &&
             other.glass == glass &&
-            other.shape == shape
+            other.shape == shape &&
+            other.interaction === interaction
 
     override fun hashCode(): Int =
-        31 * (31 * backdrop.hashCode() + glass.hashCode()) + shape.hashCode()
+        31 * (31 * (31 * backdrop.hashCode() + glass.hashCode()) + shape.hashCode()) +
+            interaction.hashCode()
 }
 
 internal class GlassNode(
     private var backdrop: GlassBackdrop,
     private var glass: Glass,
     private var shape: CornerBasedShape,
+    interaction: GlassInteractionState?,
 ) : Modifier.Node(),
     DrawModifierNode,
     GlobalPositionAwareModifierNode,
+    LayoutAwareModifierNode,
     PointerInputModifierNode,
     CompositionLocalConsumerModifierNode {
 
     private var scene: GlassScene? = null
     private var renderer: GlassRenderer? = null
+    private var pane: GlassPane? = null
 
     private var placement by mutableStateOf(Offset.Unspecified)
     private var placedAt = 0L
-    private var touch by mutableStateOf(Offset.Zero)
-    private val pressure = Animatable(0f)
     private val stretch = Animatable(Offset.Zero, Offset.VectorConverter)
-    private var pressedAt = Offset.Unspecified
-    private val drag = Animatable(Offset.Zero, Offset.VectorConverter)
+    private val ownTouch = GlassInteractionState()
+    private var touch = interaction ?: ownTouch
+    private var measured = Size.Zero
 
-    fun update(backdrop: GlassBackdrop, glass: Glass, shape: CornerBasedShape) {
+    fun update(
+        backdrop: GlassBackdrop,
+        glass: Glass,
+        shape: CornerBasedShape,
+        interaction: GlassInteractionState?,
+    ) {
+        if (backdrop !== this.backdrop) {
+            pane?.let {
+                this.backdrop.panes.remove(it)
+                backdrop.panes.add(it)
+            }
+        }
         this.backdrop = backdrop
         this.glass = glass
         this.shape = shape
+        touch = interaction ?: ownTouch
+        touch.resize(measured, requireDensity().density)
         if (!glass.isInteractive) settle()
         invalidateDraw()
+    }
+
+    override fun onRemeasured(size: IntSize) {
+        measured = size.toSize()
+        touch.resize(measured, requireDensity().density)
     }
 
     override fun onAttach() {
         val context = requireGraphicsContext()
         scene = GlassScene(context.createGraphicsLayer(), backdrop.layer, glass)
+        pane = GlassPane(context.createGraphicsLayer()).also { backdrop.panes.add(it) }
         renderer = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> ShaderRenderer()
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> BlurRenderer()
@@ -114,15 +144,21 @@ internal class GlassNode(
         renderer = null
         scene?.let { requireGraphicsContext().releaseGraphicsLayer(it.layer) }
         scene = null
+        pane?.let {
+            backdrop.panes.remove(it)
+            requireGraphicsContext().releaseGraphicsLayer(it.layer)
+        }
+        pane = null
         placement = Offset.Unspecified
     }
 
     override fun ContentDrawScope.draw() {
         val scene = scene
         val renderer = renderer
+        val pane = pane
         val source = backdrop.coordinates
-        if (scene == null || renderer == null || source == null || !source.isAttached ||
-            size.minDimension <= 0f
+        if (scene == null || renderer == null || pane == null || source == null ||
+            !source.isAttached || size.minDimension <= 0f
         ) {
             drawContent()
             return
@@ -131,39 +167,47 @@ internal class GlassNode(
         placement
         scene.backdrop = backdrop.layer
         scene.glass = glass
-        // Held glass drifts toward the finger and stretches along the pull, less so the larger it is.
-        val reach = drag.value
-        val distance = reach.getDistance()
-        val lightness = (ReferenceSize.toPx() / size.maxDimension).coerceAtMost(1.5f)
-        val shift = reach * (PullShift * lightness)
-        val tug = if (distance > 0f) {
-            val amount = (distance / density * PullStretch * sqrt(lightness)).coerceAtMost(MaxPull)
-            amount * (reach.x * reach.x - reach.y * reach.y) / (distance * distance)
-        } else {
-            0f
-        }
+        // Held glass swells, drifts toward the finger and stretches along the pull.
+        val held = touch.scale
+        val shift = touch.offset
 
-        scene.origin = source.localPositionOf(requireLayoutCoordinates(), Offset.Zero) + shift
+        val position = source.localPositionOf(requireLayoutCoordinates(), Offset.Zero)
+        scene.origin = position + shift
+        scene.panes = backdrop.panes
+        scene.beneath = backdrop.panes.indexOf(pane).coerceAtLeast(0)
         scene.revision = backdrop.generation
         scene.isDark = when (glass.appearance) {
             GlassAppearance.Light -> false
             GlassAppearance.Dark -> true
             GlassAppearance.Automatic -> isNightMode()
         }
-        scene.touch = Offset(touch.x.coerceIn(0f, size.width), touch.y.coerceIn(0f, size.height))
-        scene.pressure = pressure.value.coerceAtLeast(0f)
-        val growth = PressGrowth.toPx() / size.maxDimension
-        scene.glow = scene.pressure * (PressGlow + PressGlowPerGrowth * growth)
+        val finger = touch.position
+        scene.touch = Offset(finger.x.coerceIn(0f, size.width), finger.y.coerceIn(0f, size.height))
+        scene.pressure = touch.pressure.coerceAtLeast(0f)
+        scene.glow = scene.pressure * (PressGlow + PressGlowPerGrowth * touch.growth)
         resolveRadii(scene.radii)
 
-        val swell = pressure.value * growth
         val pull = stretch.value
-        scene.scaleX = (1f + swell + pull.x - pull.y * 0.5f) * (1f + tug)
-        scene.scaleY = (1f + swell + pull.y - pull.x * 0.5f) * (1f - tug)
-        translate(shift.x, shift.y) {
-            with(renderer) { render(scene) }
-            scale(scene.scaleX, scene.scaleY) { this@draw.drawContent() }
+        scene.scaleX = held.scaleX + pull.x - pull.y * 0.5f
+        scene.scaleY = held.scaleY + pull.y - pull.x * 0.5f
+        // Everything this glass draws is kept, so glass placed on top of it can show it too.
+        // While recording, this scope stands in as its own density, so reading a density from it
+        // would never return. The renderer therefore draws with the real one handed to it.
+        val screen = requireDensity()
+        val direction = layoutDirection
+        val bounds = size
+        pane.layer.record {
+            draw(screen, direction, drawContext.canvas, bounds, drawContext.graphicsLayer) {
+                translate(shift.x, shift.y) { with(renderer) { render(scene) } }
+            }
+            translate(shift.x, shift.y) {
+                scale(scene.scaleX, scene.scaleY, pivot = bounds.center) {
+                    this@draw.drawContent()
+                }
+            }
         }
+        if (pane.origin != position) pane.origin = position
+        drawLayer(pane.layer)
     }
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
@@ -185,22 +229,15 @@ internal class GlassNode(
     ) {
         if (!glass.isInteractive || pass != PointerEventPass.Main) return
         val change = pointerEvent.changes.firstOrNull() ?: return
-        touch = change.position
         when (pointerEvent.type) {
-            PointerEventType.Press -> {
-                pressedAt = change.position
-                press(1f)
-            }
-            PointerEventType.Move -> if (pressedAt.isSpecified) {
-                val reach = change.position - pressedAt
-                coroutineScope.launch { drag.snapTo(reach) }
-            }
-            PointerEventType.Release -> press(0f)
+            PointerEventType.Press -> touch.press(coroutineScope, change.position)
+            PointerEventType.Move -> touch.move(change.position)
+            PointerEventType.Release -> touch.release(coroutineScope)
         }
     }
 
     override fun onCancelPointerInput() {
-        if (pressure.targetValue != 0f || pressedAt.isSpecified) press(0f)
+        touch.release(coroutineScope)
     }
 
     override fun sharePointerInputWithSiblings(): Boolean = !glass.isInteractive
@@ -208,18 +245,6 @@ internal class GlassNode(
     private fun isNightMode(): Boolean {
         val mode = currentValueOf(LocalConfiguration).uiMode and Configuration.UI_MODE_NIGHT_MASK
         return mode == Configuration.UI_MODE_NIGHT_YES
-    }
-
-    private fun press(target: Float) {
-        if (target == 0f) {
-            pressedAt = Offset.Unspecified
-            coroutineScope.launch { drag.animateTo(Offset.Zero, ReturnSpring) }
-        }
-        coroutineScope.launch {
-            // Pressing snaps up quickly; letting go rebounds past the resting size once.
-            val motion = if (target > 0f) PressSpring else ReleaseSpring
-            pressure.animateTo(target, motion)
-        }
     }
 
     private fun follow(velocity: Offset) {
@@ -236,11 +261,8 @@ internal class GlassNode(
 
     private fun settle() {
         if (!isAttached) return
-        coroutineScope.launch {
-            pressure.snapTo(0f)
-            stretch.snapTo(Offset.Zero)
-            drag.snapTo(Offset.Zero)
-        }
+        touch.settle(coroutineScope)
+        coroutineScope.launch { stretch.snapTo(Offset.Zero) }
     }
 
     private fun ContentDrawScope.resolveRadii(target: FloatArray) {
@@ -257,14 +279,6 @@ internal class GlassNode(
     }
 
     private companion object {
-        val PressGrowth = 17.dp
-        val PressSpring = spring<Float>(dampingRatio = 0.7f, stiffness = 850f)
-        val ReleaseSpring = spring<Float>(dampingRatio = 0.4f, stiffness = 300f)
-        val ReturnSpring = spring<Offset>(dampingRatio = 0.4f, stiffness = 300f)
-        val ReferenceSize = 44.dp
-        const val PullShift = 0.036f
-        const val PullStretch = 0.00033f
-        const val MaxPull = 0.3f
         const val StretchPerVelocity = 0.2f
         const val MaxStretch = 0.14f
     }

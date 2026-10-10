@@ -4,9 +4,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -21,7 +24,15 @@ import io.github.itshedimisawi.vitro.internal.GlassBackdropElement
 @Stable
 public class GlassBackdrop internal constructor(internal val layer: GraphicsLayer) {
     internal var coordinates: LayoutCoordinates? = null
+
+    // Glass drawn over this backdrop, lowest first. Each piece shows through the ones above it.
+    internal val panes = mutableStateListOf<GlassPane>()
     internal var generation: Int by mutableIntStateOf(0)
+}
+
+/** One piece of glass over a backdrop: everything it draws, and where it sits on the backdrop. */
+internal class GlassPane(val layer: GraphicsLayer) {
+    var origin by mutableStateOf(Offset.Zero)
 }
 
 /**
@@ -37,7 +48,8 @@ public fun rememberGlassBackdrop(): GlassBackdrop {
  * Marks this element's content as what glass sharing [backdrop] sees behind it.
  *
  * The content is drawn as usual. Elements using [glassEffect] must be placed outside of it,
- * typically as siblings layered on top, since glass cannot refract itself.
+ * typically as siblings layered on top, since glass cannot refract itself. Glass placed over
+ * other glass on the same backdrop does see it: each piece shows through the ones added after it.
  *
  * @param backdrop Handle that connects this content to the glass drawn over it.
  */

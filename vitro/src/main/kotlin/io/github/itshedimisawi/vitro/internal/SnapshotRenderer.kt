@@ -56,9 +56,7 @@ internal class SnapshotRenderer(
             size = IntSize(ceil(width / reduction).toInt(), ceil(height / reduction).toInt()),
         ) {
             scale(1f / reduction, 1f / reduction, pivot = Offset.Zero) {
-                translate(margin - scene.origin.x, margin - scene.origin.y) {
-                    drawLayer(scene.backdrop)
-                }
+                translate(margin - scene.origin.x, margin - scene.origin.y) { drawBeneath(scene) }
             }
         }
 
@@ -78,7 +76,7 @@ internal class SnapshotRenderer(
         with(painter) {
             paint(scene) {
                 if (image == null) {
-                    translate(-scene.origin.x, -scene.origin.y) { drawLayer(scene.backdrop) }
+                    translate(-scene.origin.x, -scene.origin.y) { drawBeneath(scene) }
                 } else {
                     // Keeps a slightly late snapshot pinned to the content while the glass moves.
                     val drift = frameOrigin - scene.origin

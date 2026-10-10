@@ -29,9 +29,7 @@ internal class BlurRenderer : GlassRenderer {
             ceil(size.height).toInt() + margin * 2,
         )
         layer.record(size = extent) {
-            translate(margin - scene.origin.x, margin - scene.origin.y) {
-                drawLayer(scene.backdrop)
-            }
+            translate(margin - scene.origin.x, margin - scene.origin.y) { drawBeneath(scene) }
         }
         layer.topLeft = IntOffset(-margin, -margin)
         layer.renderEffect = if (blur > 0f) BlurEffect(blur, blur, TileMode.Clamp) else null

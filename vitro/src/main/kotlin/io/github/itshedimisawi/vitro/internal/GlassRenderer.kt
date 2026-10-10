@@ -3,14 +3,20 @@ package io.github.itshedimisawi.vitro.internal
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import io.github.itshedimisawi.vitro.Glass
+import io.github.itshedimisawi.vitro.GlassPane
 
 internal class GlassScene(
     val layer: GraphicsLayer,
     var backdrop: GraphicsLayer,
     var glass: Glass,
 ) {
+    // Glass lying under this one: the first `beneath` entries of `panes`.
+    var panes: List<GlassPane> = emptyList()
+    var beneath: Int = 0
     var origin: Offset = Offset.Zero
     var touch: Offset = Offset.Zero
     var pressure: Float = 0f
@@ -20,6 +26,18 @@ internal class GlassScene(
     var scaleX: Float = 1f
     var scaleY: Float = 1f
     val radii: FloatArray = FloatArray(4)
+}
+
+/**
+ * Draws what this glass looks through, in the backdrop's coordinates: the backdrop itself, then
+ * every piece of glass placed beneath this one.
+ */
+internal fun DrawScope.drawBeneath(scene: GlassScene) {
+    drawLayer(scene.backdrop)
+    for (index in 0 until minOf(scene.beneath, scene.panes.size)) {
+        val pane = scene.panes[index]
+        translate(pane.origin.x, pane.origin.y) { drawLayer(pane.layer) }
+    }
 }
 
 internal interface GlassRenderer {

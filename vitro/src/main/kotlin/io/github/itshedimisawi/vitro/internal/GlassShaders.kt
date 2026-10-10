@@ -44,6 +44,7 @@ uniform shader backdrop;
 uniform float bevel;
 uniform float depth;
 uniform float dispersion;
+uniform float zoom;
 uniform float saturation;
 uniform float brightness;
 uniform float dark;
@@ -80,9 +81,9 @@ half4 main(float2 coord) {
 
     float fringe = 2.0 * dispersion;
     float3 color = float3(
-        backdrop.eval(coord + shift * (1.0 - fringe)).r,
-        backdrop.eval(coord + shift).g,
-        backdrop.eval(coord + shift * (1.0 + fringe)).b
+        backdrop.eval(center + (p + shift * (1.0 - fringe)) * zoom).r,
+        backdrop.eval(center + (p + shift) * zoom).g,
+        backdrop.eval(center + (p + shift * (1.0 + fringe)) * zoom).b
     );
 
     float3 weights = float3(0.2126, 0.7152, 0.0722);

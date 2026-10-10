@@ -15,9 +15,12 @@ import io.github.itshedimisawi.vitro.internal.GlassEffectElement
  * @param backdrop Content seen through the glass, attached elsewhere with [glassBackdrop].
  * @param glass Material configuration, such as [Glass.Regular] or [Glass.Clear].
  * @param shape Outline of the glass. Defaults to a capsule.
+ * @param interaction Receives the touch on this glass when it is [interactive][Glass.interactive],
+ * so other elements can follow it. Leave it out when nothing else needs to know.
  */
 public fun Modifier.glassEffect(
     backdrop: GlassBackdrop,
     glass: Glass = Glass.Regular,
     shape: CornerBasedShape = CircleShape,
-): Modifier = this then GlassEffectElement(backdrop, glass, shape)
+    interaction: GlassInteractionState? = null,
+): Modifier = this then GlassEffectElement(backdrop, glass, shape, interaction)

@@ -50,14 +50,16 @@ internal class ShaderRenderer : GlassRenderer {
         val layer = scene.layer
         // The layer covers the outline at its grown size, so a pressed element shows what is
         // really behind its larger footprint instead of a magnified copy.
-        val marginX = overhang(size.width, scene.scaleX)
-        val marginY = overhang(size.height, scene.scaleY)
+        // Glass that shrinks what it shows also reaches past its own outline.
+        val reach = 1f / glass.magnification.coerceIn(MinMagnification, 1f)
+        val marginX = overhang(size.width, scene.scaleX * reach)
+        val marginY = overhang(size.height, scene.scaleY * reach)
         val extent = IntSize(
             ceil(size.width).toInt() + marginX * 2,
             ceil(size.height).toInt() + marginY * 2,
         )
         layer.record(extent) {
-            translate(marginX - scene.origin.x, marginY - scene.origin.y) { drawLayer(scene.backdrop) }
+            translate(marginX - scene.origin.x, marginY - scene.origin.y) { drawBeneath(scene) }
         }
         layer.topLeft = IntOffset(-marginX, -marginY)
 
@@ -67,6 +69,7 @@ internal class ShaderRenderer : GlassRenderer {
         material.setFloatUniform("bevel", glass.refractionHeight.toPx())
         material.setFloatUniform("depth", glass.refractionAmount.toPx())
         material.setFloatUniform("dispersion", glass.dispersion)
+        material.setFloatUniform("zoom", 1f / glass.magnification.coerceAtLeast(MinMagnification))
         material.setFloatUniform("saturation", glass.saturation)
         material.setFloatUniform("brightness", glass.brightness.coerceIn(-1f, 1f))
         material.setFloatUniform("dark", if (scene.isDark) 1f else 0f)
@@ -101,8 +104,11 @@ internal class ShaderRenderer : GlassRenderer {
         drawLayer(layer)
     }
 
-    private fun overhang(length: Float, scale: Float): Int =
-        ceil(max(length * (scale - 1f) / 2f, 0f)).toInt()
+    // Rounded up in coarse steps: a layer that changes size every frame is reallocated every frame.
+    private fun overhang(length: Float, scale: Float): Int {
+        val needed = max(length * (scale - 1f) / 2f, 0f)
+        return ceil(needed / OverhangStep).toInt() * OverhangStep
+    }
 
     private fun RuntimeShader.setOutline(scope: DrawScope, scene: GlassScene, inset: Offset) {
         setFloatUniform("center", inset.x + scope.size.width / 2f, inset.y + scope.size.height / 2f)
@@ -114,3 +120,5 @@ internal class ShaderRenderer : GlassRenderer {
 }
 
 internal const val TintStrength = 0.85f
+private const val OverhangStep = 48
+private const val MinMagnification = 0.5f
