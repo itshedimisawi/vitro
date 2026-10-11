@@ -11,13 +11,17 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -67,6 +71,7 @@ import androidx.compose.ui.unit.sp
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.glassBackdrop
+import io.github.itshedimisawi.vitro.scrollEdgeEffect
 
 private val HeaderHeight = 430.dp
 private val ScreenMargin = 20.dp
@@ -109,11 +114,17 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
     var playing by rememberSaveable { mutableIntStateOf(-1) }
     val dim by animateFloatAsState(if (isAlertShown) 0.25f else 0f, label = "dim")
 
+    val page = if (isDark) Color.Black else Color(0xFFF2F2F7)
     Column(
         modifier = Modifier
             .fillMaxSize()
             .glassBackdrop(backdrop)
-            .background(if (isDark) Color.Black else Color(0xFFF2F2F7))
+            .scrollEdgeEffect(
+                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                color = page,
+            )
+            .background(page)
             .drawWithContent {
                 drawContent()
                 drawRect(Color.Black, alpha = dim)
