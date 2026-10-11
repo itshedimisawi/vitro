@@ -56,6 +56,11 @@ private val PatternColours = listOf(
     Color(0xFF000000),
     Color(0xFF056307),
     Color(0xFF0165FC),
+    // Deep reds read next to glass in a music app, the first two in a light interface.
+    Color(0xFF800004),
+    Color(0xFF900040),
+    Color(0xFF1C0002),
+    Color(0xFF1D000C),
 )
 
 // Colours from this position on are the ones iOS puts dark glass over in a light interface.

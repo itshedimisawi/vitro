@@ -2,6 +2,7 @@ package io.github.itshedimisawi.vitro.internal
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
@@ -12,6 +13,7 @@ import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassPane
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 
 internal class GlassScene(
@@ -89,6 +91,7 @@ internal const val LightVeil = 1.32f
 internal const val LightFade = 1.34f
 internal const val LightWash = 0.58f
 internal const val DarkGain = 0.08f
+internal const val DarkVivid = 0.18f
 internal const val DarkLift = 0.19f
 internal const val DarkShade = 1f
 internal const val DarkKnee = 0.33f
@@ -99,7 +102,7 @@ internal const val LightRim = 0.91f
 internal const val PressGlow = 0.05f
 internal const val PressGlowPerGrowth = 0.35f
 
-private val LumaWeights = floatArrayOf(0.2126f, 0.7152f, 0.0722f)
+internal val LumaWeights = floatArrayOf(0.2126f, 0.7152f, 0.0722f)
 
 /**
  * What the dark material adds to content of the given brightness, for a full veil: a lift near
@@ -109,30 +112,57 @@ internal fun darkBend(brightness: Float): Float =
     DarkLift * (1f - brightness).pow(16) - DarkShade * max(brightness - DarkKnee, 0f).pow(1.5f)
 
 /**
- * How a piece of glass changes the brightness of what shows through it: its veil, how far it is
- * toward the dark material, its tint and its dimming. Refraction, blur and the rim are left out.
+ * How a piece of glass changes the colour of what shows through it: its saturation and veil, how
+ * far it is toward the dark material, its tint and its dimming. It follows the shader step by
+ * step; refraction, blur and the rim are left out.
  */
 internal data class GlassShade(
+    val saturation: Float,
     val veil: Float,
     val darkness: Float,
-    val tint: Float,
+    val tint: Color,
     val tintStrength: Float,
     val dimming: Float,
 ) {
-    fun through(brightness: Float): Float {
-        var pale = brightness * (1f + veil)
-        var deep = pale
-        if (veil >= 0f) {
-            pale = brightness + veil * (LightVeil - LightFade * brightness)
-            deep = max(brightness * (1f + DarkGain * veil) + veil * darkBend(brightness), 0f)
+    /** Replaces the red, green and blue in [color] with what shows through the glass. */
+    fun through(color: FloatArray) {
+        val grey = color[0] * LumaWeights[0] + color[1] * LumaWeights[1] + color[2] * LumaWeights[2]
+        var luma = 0f
+        for (channel in 0..2) {
+            color[channel] = max(grey + (color[channel] - grey) * saturation, 0f)
+            luma += color[channel] * LumaWeights[channel]
         }
-        val veiled = pale + (deep - pale) * darkness
-        val tinted = veiled + (tint - veiled) * tintStrength
-        return (tinted * (1f - dimming)).coerceIn(0f, 1f)
+        luma = min(luma, 1f)
+        for (channel in 0..2) {
+            val value = color[channel]
+            var pale = value * (1f + veil)
+            var deep = pale
+            if (veil >= 0f) {
+                pale = value + (luma - value) * LightWash * veil + veil * (LightVeil - LightFade * luma)
+                val vivid = max(luma + (value - luma) * (1f + DarkVivid * veil), 0f)
+                deep = max(vivid * (1f + DarkGain * veil) + veil * darkBend(luma), 0f)
+            }
+            val veiled = pale + (deep - pale) * darkness
+            val tinted = veiled + (tintChannel(channel) - veiled) * tintStrength
+            color[channel] = (tinted * (1f - dimming)).coerceIn(0f, 1f)
+        }
+    }
+
+    private fun tintChannel(channel: Int): Float = when (channel) {
+        0 -> tint.red
+        1 -> tint.green
+        else -> tint.blue
     }
 
     companion object {
-        val None = GlassShade(veil = 0f, darkness = 0f, tint = 0f, tintStrength = 0f, dimming = 0f)
+        val None = GlassShade(
+            saturation = 1f,
+            veil = 0f,
+            darkness = 0f,
+            tint = Color.Black,
+            tintStrength = 0f,
+            dimming = 0f,
+        )
     }
 }
 
@@ -140,9 +170,10 @@ internal fun GlassScene.shade(): GlassShade {
     val tint = glass.tint
     val isTinted = tint.isSpecified
     return GlassShade(
+        saturation = glass.saturation,
         veil = glass.brightness.coerceIn(-1f, 1f),
         darkness = darkness,
-        tint = if (isTinted) tint.red * LumaWeights[0] + tint.green * LumaWeights[1] + tint.blue * LumaWeights[2] else 0f,
+        tint = if (isTinted) tint else Color.Black,
         tintStrength = if (isTinted) tint.alpha * TintStrength else 0f,
         dimming = glass.dimming.coerceIn(0f, 1f),
     )
@@ -173,7 +204,7 @@ internal fun ColorMatrix.setToMaterial(scene: GlassScene) {
     val veil = scene.glass.brightness.coerceIn(0f, 1f)
     val dark = scene.darkness
     val light = 1f - dark
-    val saturation = scene.glass.saturation * (1f - LightWash * veil * light)
+    val saturation = scene.glass.saturation * (1f - LightWash * veil * light) * (1f + DarkVivid * veil * dark)
     val gain = 1f + DarkGain * veil * dark
     val lift = LightVeil * veil * light + DarkLine.first * veil * dark
     val fade = LightFade * veil * light + DarkLine.second * veil * dark

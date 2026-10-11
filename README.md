@@ -94,7 +94,7 @@ Box(Modifier.glassEffect(backdrop, Glass.Clear.copy(magnification = 0.9f))) // s
 
 ### Light and dark
 
-Glass follows the system dark theme by default and gives way to the content behind it at the far end: over near-black content it turns dark in a light interface, and over near-white content it turns light in a dark one, easing from one material to the other. Light glass is veiled toward white; dark glass stays close to the colours behind it and only lifts the darkest tones. Force either one with `copy(appearance = GlassAppearance.Dark)`.
+Glass follows the system dark theme by default and gives way to the content behind it at the far end: over near-black content it turns dark in a light interface, and over near-white content it turns light in a dark one, easing from one material to the other. What counts is the light the content gives off, so deep saturated colours and photos with bright spots keep light glass light. Light glass is veiled toward white; dark glass stays close to the colours behind it and only lifts the darkest tones. Force either one with `copy(appearance = GlassAppearance.Dark)`.
 
 Content on automatic glass needs to change colour with it. `onAppearanceChanged` reports the material the glass settles on:
 
@@ -106,6 +106,20 @@ Text(
     modifier = Modifier.glassEffect(backdrop, onAppearanceChanged = { isDark = it == GlassAppearance.Dark }),
 )
 ```
+
+### Under bars
+
+Where content scrolls under floating bars, soften it with `scrollEdgeEffect`. Put it after `glassBackdrop` on the same element so the glass takes the softened content in:
+
+```kotlin
+LazyColumn(
+    Modifier
+        .glassBackdrop(backdrop)
+        .scrollEdgeEffect(top = statusBarHeight, bottom = barsHeight)
+) { /* content */ }
+```
+
+`top` and `bottom` are the heights the bars cover. The default `ScrollEdgeEffectStyle.Soft` dissolves content into the page colour (pass `color` if the page is not white or black); `Shaded` darkens it instead and keeps its colours, which suits a light screen full of saturated artwork. In a dark interface this is a large part of how glass bars look: they sit on content that has already been taken down to about a seventh of its brightness.
 
 ### Rules of thumb
 

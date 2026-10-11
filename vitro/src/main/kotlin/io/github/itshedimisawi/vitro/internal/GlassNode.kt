@@ -333,18 +333,18 @@ internal class GlassNode(
             var shown: GlassAppearance? = null
             var wasSampled = false
             snapshotFlow {
-                val brightness = when (glass.appearance) {
+                val luminance = when (glass.appearance) {
                     GlassAppearance.Automatic ->
-                        backdrop.tone?.mean(pane.outline, beneath?.value.orEmpty()) ?: Float.NaN
+                        backdrop.tone?.luminance(pane.outline, beneath?.value.orEmpty()) ?: Float.NaN
                     else -> Float.NaN
                 }
                 val wanted = when {
                     glass.appearance == GlassAppearance.Light -> 0f
                     glass.appearance == GlassAppearance.Dark -> 1f
-                    brightness.isNaN() -> if (isNight) 1f else 0f
-                    else -> darknessOver(brightness, isNight)
+                    luminance.isNaN() -> if (isNight) 1f else 0f
+                    else -> darknessOver(luminance, isNight)
                 }
-                wanted to !brightness.isNaN()
+                wanted to !luminance.isNaN()
             }.collectLatest { (wanted, isSampled) ->
                 val appearance = if (wanted >= 0.5f) GlassAppearance.Dark else GlassAppearance.Light
                 if (appearance != shown) {

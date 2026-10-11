@@ -2,18 +2,16 @@ package io.github.itshedimisawi.vitro.sample.music
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -37,7 +35,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -45,8 +42,10 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import io.github.itshedimisawi.vitro.Glass
+import io.github.itshedimisawi.vitro.ScrollEdgeEffectStyle
 import io.github.itshedimisawi.vitro.glassBackdrop
 import io.github.itshedimisawi.vitro.rememberGlassBackdrop
+import io.github.itshedimisawi.vitro.scrollEdgeEffect
 import io.github.itshedimisawi.vitro.sample.GlassSurface
 import io.github.itshedimisawi.vitro.sample.GlassTab
 import io.github.itshedimisawi.vitro.sample.rememberArtwork
@@ -93,9 +92,6 @@ val ScreenMargin = 20.dp
 /** Room left at the end of every page for the controls floating over it. */
 val ControlsRoom = 168.dp
 
-private val TopFade = 28.dp
-private val BottomFade = 200.dp
-
 private val Tabs = listOf(
     GlassTab("Home", Icons.Rounded.Home),
     GlassTab("Radio", Icons.Rounded.Sensors),
@@ -137,7 +133,26 @@ fun MusicApp() {
 
     CompositionLocalProvider(LocalMusicColors provides colors, LocalContentColor provides colors.ink) {
         Box(Modifier.fillMaxSize().background(colors.page)) {
-            Box(Modifier.fillMaxSize().glassBackdrop(backdrop).background(colors.page).nestedScroll(scrolling)) {
+            // The pages dissolve into the page colour under the status bar. Under the controls
+            // the library does the same, and the pages full of artwork are shaded instead.
+            val covered by animateDpAsState(
+                targetValue = controlsHeight(isCollapsed && !isSearching),
+                animationSpec = spring(dampingRatio = 1f, stiffness = 320f),
+                label = "covered",
+            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .glassBackdrop(backdrop)
+                    .scrollEdgeEffect(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(), color = colors.page)
+                    .scrollEdgeEffect(
+                        bottom = covered,
+                        style = if (tab == LibraryTab && !isSearching) ScrollEdgeEffectStyle.Soft else ScrollEdgeEffectStyle.Shaded,
+                        color = colors.page,
+                    )
+                    .background(colors.page)
+                    .nestedScroll(scrolling),
+            ) {
                 Crossfade(
                     targetState = if (isSearching) SearchPage else tab,
                     animationSpec = tween(PageFadeMillis),
@@ -150,7 +165,6 @@ fun MusicApp() {
                         else -> SearchPage(scrolls[3], art, query)
                     }
                 }
-                EdgeFades()
             }
 
             if (tab == LibraryTab && !isSearching) {
@@ -185,42 +199,6 @@ fun MusicApp() {
                 backdrop = backdrop,
             )
         }
-    }
-}
-
-/**
- * Soft edges where the page runs under the status bar and under the floating controls. The glass
- * sits above these, so they are part of what it shows.
- */
-@Composable
-private fun EdgeFades() {
-    val colors = LocalMusicColors.current
-    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    Box(Modifier.fillMaxSize()) {
-        Spacer(
-            Modifier
-                .fillMaxWidth()
-                .height(top + TopFade)
-                .background(
-                    Brush.verticalGradient(
-                        0f to colors.page.copy(alpha = 0.94f),
-                        top / (top + TopFade) * 0.6f to colors.page.copy(alpha = 0.8f),
-                        1f to colors.page.copy(alpha = 0f),
-                    ),
-                ),
-        )
-        Spacer(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(bottom + BottomFade)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = if (colors.isDark) 0.6f else 0.22f)),
-                    ),
-                ),
-        )
     }
 }
 

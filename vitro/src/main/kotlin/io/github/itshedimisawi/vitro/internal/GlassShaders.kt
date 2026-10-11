@@ -100,10 +100,11 @@ half4 main(float2 coord) {
     float3 deep = pale;
     if (veil >= 0.0) {
         pale = mix(color, float3(luma), $LightWash * veil) + veil * ($LightVeil - $LightFade * luma);
-        // Dark glass lifts black a little and holds bright content down.
+        // Dark glass deepens colours, lifts black a little and holds bright content down.
         float lift = $DarkLift * pow(1.0 - luma, 16.0);
         float shade = $DarkShade * pow(max(luma - $DarkKnee, 0.0), 1.5);
-        deep = max(color * (1.0 + $DarkGain * veil) + veil * (lift - shade), 0.0);
+        float3 vivid = max(mix(float3(luma), color, 1.0 + $DarkVivid * veil), 0.0);
+        deep = max(vivid * (1.0 + $DarkGain * veil) + veil * (lift - shade), 0.0);
     }
 
     // The rim is lit over the veil and keeps the hue of what shows through it: a push toward
