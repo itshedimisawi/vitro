@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -31,6 +32,9 @@ internal class ShaderRenderer : GlassRenderer {
     private val grows = FloatArray(GlassShaders.MaxShapes * 4)
     private val traits = FloatArray(GlassShaders.MaxShapes * 4)
     private val tints = FloatArray(GlassShaders.MaxShapes * 4)
+
+    private var wanted = IntSize.Zero
+    private var held = IntSize.Zero
 
     override fun DrawScope.render(scene: GlassScene) {
         drawShadow(scene)
@@ -57,10 +61,24 @@ internal class ShaderRenderer : GlassRenderer {
     // also reaches past its own outline.
     override fun DrawScope.view(scene: GlassScene): Rect {
         val reach = 1f / scene.glass.magnification.coerceIn(MinMagnification, 1f)
-        val marginX = overhang(scene, reach, isWide = true).toFloat()
-        val marginY = overhang(scene, reach, isWide = false).toFloat()
-        return Rect(-marginX, -marginY, ceil(scene.extent.width) + marginX, ceil(scene.extent.height) + marginY)
+        val needed = IntSize(
+            ceil(scene.extent.width).toInt() + 2 * overhang(scene, reach, isWide = true),
+            ceil(scene.extent.height).toInt() + 2 * overhang(scene, reach, isWide = false),
+        )
+        // A layer is given a new buffer whenever its size changes, so while the glass is changing
+        // size the layer only grows, a step at a time, and takes its exact size once it rests.
+        val room = GrowthRoom.roundToPx()
+        held = when {
+            needed == wanted -> needed
+            else -> IntSize(roomFor(needed.width, held.width, room), roomFor(needed.height, held.height, room))
+        }
+        wanted = needed
+        val left = -((held.width - ceil(scene.extent.width).toInt()) / 2).toFloat()
+        val top = -((held.height - ceil(scene.extent.height).toInt()) / 2).toFloat()
+        return Rect(left, top, left + held.width, top + held.height)
     }
+
+    private fun roomFor(needed: Int, held: Int, room: Int): Int = if (needed <= held) held else needed + room
 
     private fun DrawScope.drawMaterial(scene: GlassScene) {
         val glass = scene.glass
@@ -106,8 +124,7 @@ internal class ShaderRenderer : GlassRenderer {
         clipRect(view.left, view.top, view.right, view.bottom) { drawLayer(layer) }
     }
 
-    // How far the largest outline reaches past its place at rest along one axis. Rounded up in
-    // coarse steps: a layer that changes size every frame is reallocated every frame.
+    // How far the largest outline reaches past its place at rest along one axis.
     private fun overhang(scene: GlassScene, reach: Float, isWide: Boolean): Int {
         var needed = 0f
         for (shape in scene.shapes) {
@@ -115,7 +132,7 @@ internal class ShaderRenderer : GlassRenderer {
             val scale = (if (isWide) shape.scaleX else shape.scaleY) * reach
             needed = max(needed, length * (scale - 1f) / 2f)
         }
-        return ceil(needed / OverhangStep).toInt() * OverhangStep
+        return ceil(needed).toInt()
     }
 
     // Shapes are given by their centres, measured from `inset` past the corner of the frame.
@@ -144,5 +161,5 @@ internal class ShaderRenderer : GlassRenderer {
 }
 
 internal const val TintStrength = 0.85f
-private const val OverhangStep = 48
+private val GrowthRoom = 16.dp
 private const val MinMagnification = 0.5f

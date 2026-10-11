@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
@@ -102,6 +103,10 @@ fun GlassTabBar(
     val restore by rememberUpdatedState(onRestore)
     val isMinimized by rememberUpdatedState { minimized() > 0.5f }
     var barSize by remember { mutableStateOf(IntSize.Zero) }
+    // The tabs keep the layout of the full bar while it is made small: they stay where they are
+    // and the shrinking glass closes over them, so nothing is laid out again on the way.
+    var fullSize by remember { mutableStateOf(IntSize.Zero) }
+    fun tabsSize(): IntSize = if (fullSize == IntSize.Zero) barSize else fullSize
     // Where the selection rests, counted in tabs: 0 is the first tab, 1.5 is between the second and third.
     val slot = remember { Animatable(selected.toFloat()) }
     // While held the selection sits under the finger, read straight from the touch so it never
@@ -111,7 +116,7 @@ fun GlassTabBar(
 
     fun slotUnder(x: Float): Float {
         val inset = with(density) { SelectionInset.toPx() }
-        val tab = (barSize.width - inset * 2f) / tabs.size
+        val tab = (tabsSize().width - inset * 2f) / tabs.size
         if (tab <= 0f) return slot.value
         return ((x - inset) / tab - 0.5f).coerceIn(0f, tabs.size - 1f)
     }
@@ -129,7 +134,7 @@ fun GlassTabBar(
     }
 
     fun selection(): Rect =
-        density.selectionBounds(barSize.toSize(), tabs.size, currentSlot(), touch.pressure)
+        density.selectionBounds(tabsSize().toSize(), tabs.size, currentSlot(), touch.pressure)
 
     // The lens is drawn outside the bar, so it applies the bar's swell and drift itself to stay on it.
     fun lensBounds(): Rect {
@@ -177,43 +182,60 @@ fun GlassTabBar(
         Box(
             Modifier
                 .fillMaxSize()
-                .onSizeChanged { barSize = it }
+                .onSizeChanged {
+                    barSize = it
+                    if (minimized() <= 0f) fullSize = it
+                }
                 .glassEffect(backdrop, glass.interactive(), interaction = touch, onAppearanceChanged = ink::follow)
-                .drawBehind {
-                    val rest = 1f - touch.pressure.coerceIn(0f, 1f)
-                    val bounds = selection()
-                    drawRoundRect(
-                        color = contentColor,
-                        topLeft = bounds.topLeft,
-                        size = bounds.size,
-                        cornerRadius = CornerRadius(bounds.height / 2f),
-                        alpha = selectionStrength * rest * tabsAlpha(minimized()),
-                    )
-                },
+                .clip(CircleShape),
         ) {
-            // Outside the selection the labels are plain; inside it they take the accent
-            // colour and are enlarged a little as the selection lifts.
-            val fading = Modifier.graphicsLayer { alpha = tabsAlpha(minimized()) }
-            Tabs(
-                tabs = tabs,
-                color = contentColor,
-                modifier = fading.drawWithContent {
-                    clipPath(selection().capsule(), ClipOp.Difference) {
-                        this@drawWithContent.drawContent()
+            Box(
+                Modifier
+                    .layout { measurable, constraints ->
+                        val full = tabsSize()
+                        val placeable = measurable.measure(
+                            if (full == IntSize.Zero) constraints else Constraints.fixed(full.width, full.height),
+                        )
+                        layout(constraints.maxWidth, constraints.maxHeight) {
+                            placeable.place(0, (constraints.maxHeight - placeable.height) / 2)
+                        }
                     }
-                },
-            )
-            Tabs(
-                tabs = tabs,
-                color = accent,
-                modifier = fading.drawWithContent {
-                    val bounds = selection()
-                    val zoom = 1f + LensZoom * touch.pressure.coerceIn(0f, 1f)
-                    clipPath(bounds.capsule()) {
-                        scale(zoom, bounds.center) { this@drawWithContent.drawContent() }
-                    }
-                },
-            )
+                    .graphicsLayer { alpha = tabsAlpha(minimized()) }
+                    .drawBehind {
+                        val rest = 1f - touch.pressure.coerceIn(0f, 1f)
+                        val bounds = selection()
+                        drawRoundRect(
+                            color = contentColor,
+                            topLeft = bounds.topLeft,
+                            size = bounds.size,
+                            cornerRadius = CornerRadius(bounds.height / 2f),
+                            alpha = selectionStrength * rest,
+                        )
+                    },
+            ) {
+                // Outside the selection the labels are plain; inside it they take the accent
+                // colour and are enlarged a little as the selection lifts.
+                Tabs(
+                    tabs = tabs,
+                    color = contentColor,
+                    modifier = Modifier.drawWithContent {
+                        clipPath(selection().capsule(), ClipOp.Difference) {
+                            this@drawWithContent.drawContent()
+                        }
+                    },
+                )
+                Tabs(
+                    tabs = tabs,
+                    color = accent,
+                    modifier = Modifier.drawWithContent {
+                        val bounds = selection()
+                        val zoom = 1f + LensZoom * touch.pressure.coerceIn(0f, 1f)
+                        clipPath(bounds.capsule()) {
+                            scale(zoom, bounds.center) { this@drawWithContent.drawContent() }
+                        }
+                    },
+                )
+            }
             Icon(
                 imageVector = tabs[selected].icon,
                 contentDescription = null,

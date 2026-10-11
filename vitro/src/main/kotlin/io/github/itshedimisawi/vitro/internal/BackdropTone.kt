@@ -20,6 +20,12 @@ internal class BackdropTone private constructor(
     private val cell: Float,
     private val colors: FloatArray,
 ) {
+    // The light each cell gives off, worked out once since it is asked for on every frame that
+    // glass moves.
+    private val light = FloatArray(columns * rows) { cell ->
+        emitted(colors[cell * 3]) * LumaWeights[0] + emitted(colors[cell * 3 + 1]) * LumaWeights[1] +
+            emitted(colors[cell * 3 + 2]) * LumaWeights[2]
+    }
 
     /**
      * Mean luminance of what lies inside [area], given in backdrop pixels: the backdrop as seen
@@ -37,12 +43,15 @@ internal class BackdropTone private constructor(
         var sum = 0f
         for (row in top until bottom) {
             for (column in left until right) {
-                colors.copyInto(seen, 0, (row * columns + column) * 3, (row * columns + column) * 3 + 3)
-                if (beneath.isNotEmpty()) {
-                    val spot = Offset((column + 0.5f) * cell, (row + 0.5f) * cell)
-                    for (pane in beneath) {
-                        if (pane.outline.contains(spot)) pane.shade.through(seen)
-                    }
+                val at = row * columns + column
+                if (beneath.isEmpty()) {
+                    sum += light[at]
+                    continue
+                }
+                colors.copyInto(seen, 0, at * 3, at * 3 + 3)
+                val spot = Offset((column + 0.5f) * cell, (row + 0.5f) * cell)
+                for (pane in beneath) {
+                    if (pane.outline.contains(spot)) pane.shade.through(seen)
                 }
                 sum += emitted(seen[0]) * LumaWeights[0] + emitted(seen[1]) * LumaWeights[1] + emitted(seen[2]) * LumaWeights[2]
             }
