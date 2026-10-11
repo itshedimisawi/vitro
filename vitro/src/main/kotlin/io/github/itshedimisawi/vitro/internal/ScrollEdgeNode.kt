@@ -25,6 +25,7 @@ import androidx.compose.ui.node.findNearestAncestor
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.requireLayoutCoordinates
+import androidx.compose.ui.node.requireView
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
@@ -127,8 +128,9 @@ internal class ScrollEdgeNode(
             val layer = content ?: context.createGraphicsLayer().also { content = it }
             layer.record { this@draw.drawContent() }
             drawLayer(layer)
-            with(reader) { read(layer, context, coroutineScope) }
+            with(reader) { read(layer, context, coroutineScope, requireView()) }
         } else {
+            reader.pause()
             drawContent()
         }
 
@@ -184,6 +186,7 @@ internal class ScrollEdgeNode(
         val origin = source.localPositionOf(requireLayoutCoordinates(), Offset.Zero)
         val outlines = ArrayList<Rect>(backdrop.panes.size)
         for (pane in backdrop.panes) {
+            if (pane.isContent) continue
             val outline = pane.outline.translate(-origin.x, -origin.y)
             if (!outline.isEmpty && outline.right > 0f && outline.left < size.width) outlines += outline
         }

@@ -1,5 +1,7 @@
 package io.github.itshedimisawi.vitro.internal
 
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.GraphicsContext
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -25,16 +27,53 @@ internal class ToneReader(private val onRead: (BackdropTone) -> Unit) {
     private var miniature: GraphicsLayer? = null
     private var reading: Job? = null
     private var isStale = false
+    private var cell = 1f
+    private var scope: CoroutineScope? = null
+    private var watched: View? = null
+
+    // Content can change without being drawn again, when a layer inside it moves or scrolls. Any
+    // frame of the window may therefore have changed what there is to read.
+    private val onFrame = ViewTreeObserver.OnPreDrawListener {
+        refresh()
+        true
+    }
 
     /** Call while drawing, whenever [source] has been recorded again. */
-    fun DrawScope.read(source: GraphicsLayer, context: GraphicsContext, scope: CoroutineScope) {
+    fun DrawScope.read(source: GraphicsLayer, context: GraphicsContext, scope: CoroutineScope, view: View) {
         val small = miniature ?: context.createGraphicsLayer().also { miniature = it }
-        val cell = Cell.toPx().coerceAtLeast(1f)
+        cell = Cell.toPx().coerceAtLeast(1f)
         small.record(size = IntSize(ceil(size.width / cell).toInt(), ceil(size.height / cell).toInt())) {
             scale(1f / cell, 1f / cell, pivot = Offset.Zero) { drawLayer(source) }
         }
+        this@ToneReader.scope = scope
+        if (watched !== view) {
+            unwatch()
+            watched = view
+            view.viewTreeObserver.addOnPreDrawListener(onFrame)
+        }
+        refresh()
+    }
+
+    /** Stops reading until [read] is called again. */
+    fun pause() {
+        unwatch()
+        scope = null
+    }
+
+    fun release(context: GraphicsContext) {
+        pause()
+        reading?.cancel()
+        reading = null
+        miniature?.let { context.releaseGraphicsLayer(it) }
+        miniature = null
+    }
+
+    private fun refresh() {
+        val scope = scope ?: return
+        val small = miniature ?: return
         isStale = true
         if (reading?.isActive == true) return
+        val cell = cell
         reading = scope.launch {
             while (isStale) {
                 isStale = false
@@ -45,11 +84,10 @@ internal class ToneReader(private val onRead: (BackdropTone) -> Unit) {
         }
     }
 
-    fun release(context: GraphicsContext) {
-        reading?.cancel()
-        reading = null
-        miniature?.let { context.releaseGraphicsLayer(it) }
-        miniature = null
+    private fun unwatch() {
+        val observer = watched?.viewTreeObserver
+        if (observer != null && observer.isAlive) observer.removeOnPreDrawListener(onFrame)
+        watched = null
     }
 
     private companion object {

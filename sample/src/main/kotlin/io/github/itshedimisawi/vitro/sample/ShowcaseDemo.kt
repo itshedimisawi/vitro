@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -60,12 +59,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.itshedimisawi.vitro.Glass
@@ -131,7 +128,17 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
             }
             .verticalScroll(scroll),
     ) {
-        Header()
+        Header(
+            backdrop = backdrop,
+            onPlay = {
+                if (playing < 0) playing = 0
+                isPlaying = true
+            },
+            onShuffle = {
+                playing = (playing + 3).mod(Tracks.size)
+                isPlaying = true
+            },
+        )
         Column(
             modifier = Modifier.padding(horizontal = ScreenMargin, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -194,45 +201,6 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
                 }
             }
             Spacer(Modifier.navigationBarsPadding().height(190.dp))
-        }
-    }
-
-    // Clear glass riding on the photo. It scrolls with the page from outside it, because glass
-    // cannot be part of the content it looks through.
-    val headerEnd = with(LocalDensity.current) { HeaderHeight.roundToPx() }
-    if (scroll.value < headerEnd) {
-        val clear = Glass.Clear.dimmed()
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier
-                .offset { IntOffset(0, -scroll.value) }
-                .padding(start = ScreenMargin, top = HeaderHeight - ControlSize - 22.dp, end = ScreenMargin)
-                .fillMaxWidth(),
-        ) {
-            GlassTextButton(
-                text = "Play",
-                icon = Icons.Rounded.PlayArrow,
-                onClick = {
-                    if (playing < 0) playing = 0
-                    isPlaying = true
-                },
-                backdrop = backdrop,
-                glass = clear,
-                contentColor = Color.White,
-            )
-            GlassTextButton(
-                text = "Shuffle",
-                icon = Icons.Rounded.Shuffle,
-                onClick = {
-                    playing = (playing + 3).mod(Tracks.size)
-                    isPlaying = true
-                },
-                backdrop = backdrop,
-                glass = clear,
-                contentColor = Color.White,
-            )
-            Spacer(Modifier.weight(1f))
-            GlassIconButton(Icons.Rounded.FavoriteBorder, "Favourite", {}, backdrop, clear, contentColor = Color.White)
         }
     }
 
@@ -336,7 +304,7 @@ fun BoxScope.ShowcaseDemo(backdrop: GlassBackdrop) {
 }
 
 @Composable
-private fun Header() {
+private fun Header(backdrop: GlassBackdrop, onPlay: () -> Unit, onShuffle: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(HeaderHeight)) {
         Image(
             painter = painterResource(Photos[3]),
@@ -361,6 +329,20 @@ private fun Header() {
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
             )
+        }
+        // Clear glass riding on the photo. It is part of the page and scrolls with it.
+        val clear = Glass.Clear.dimmed()
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = ScreenMargin, end = ScreenMargin, bottom = 22.dp)
+                .fillMaxWidth(),
+        ) {
+            GlassTextButton("Play", onPlay, backdrop, clear, icon = Icons.Rounded.PlayArrow, contentColor = Color.White)
+            GlassTextButton("Shuffle", onShuffle, backdrop, clear, icon = Icons.Rounded.Shuffle, contentColor = Color.White)
+            Spacer(Modifier.weight(1f))
+            GlassIconButton(Icons.Rounded.FavoriteBorder, "Favourite", {}, backdrop, clear, contentColor = Color.White)
         }
     }
 }

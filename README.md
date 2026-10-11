@@ -138,7 +138,7 @@ There are two looks. `Soft` dissolves content into the page colour (pass `color`
 
 ### Rules of thumb
 
-- Place glass outside the `glassBackdrop` content it uses, as a sibling layered above it. Glass cannot refract itself.
+- Place glass outside the `glassBackdrop` content it uses where you can, as a sibling layered above it. Glass that has to move with the content, such as a button on a scrolling page, may be part of it: it then sees the rest of the content, is drawn over all of it and is cut off where a scrolling parent cuts it off. It does not follow a `graphicsLayer` that scales, rotates or fades a parent.
 - Apply `glassEffect` after size and padding modifiers so it covers the final bounds.
 - Give the backdrop an opaque background.
 - Use glass sparingly, for controls and navigation that float above content.

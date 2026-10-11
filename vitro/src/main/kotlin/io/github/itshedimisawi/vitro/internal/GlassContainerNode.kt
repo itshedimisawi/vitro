@@ -114,6 +114,7 @@ internal class GlassContainerNode(spacing: Dp) : Modifier.Node(), TraversableNod
         pane.bounds = paintedBounds(scene).translate(scene.origin)
         pane.view = scene.view.translate(scene.origin)
         pane.within = lead.pane?.within.orEmpty()
+        pane.clip = lead.pane?.clip
         scene.beneath = group.beneath.value
         scene.enclosing = pane.within
 
@@ -126,7 +127,7 @@ internal class GlassContainerNode(spacing: Dp) : Modifier.Node(), TraversableNod
                 translate(shift.x, shift.y) { with(group.renderer) { render(scene) } }
             }
         }
-        drawLayer(pane.surface)
+        if (!lead.isInside) drawLayer(pane.surface)
         return scene.isSettled
     }
 
@@ -140,7 +141,8 @@ internal class GlassContainerNode(spacing: Dp) : Modifier.Node(), TraversableNod
             val group = groups.firstOrNull {
                 it.backdrop === member.backdrop && it.material == member.material &&
                     it.members.size < GlassShaders.MaxShapes
-            } ?: GlassGroup(member.backdrop, member.material, member.glass, context, before = pane).also { groups += it }
+            } ?: GlassGroup(member.backdrop, member.material, member.glass, context, before = pane, member.isInside)
+                .also { groups += it }
             group.members += member
         }
         val emptied = groups.filter { it.members.isEmpty() }
@@ -162,6 +164,7 @@ private class GlassGroup(
     glass: Glass,
     context: GraphicsContext,
     before: GlassPane,
+    isInside: Boolean,
 ) {
     val members = ArrayList<GlassNode>()
     val shapes = ArrayList<GlassShape>()
@@ -182,6 +185,11 @@ private class GlassGroup(
     init {
         val index = backdrop.panes.indexOf(before)
         if (index >= 0) backdrop.panes.add(index, pane) else backdrop.panes.add(pane)
+        if (isInside) {
+            pane.isContent = true
+            val place = backdrop.inside.indexOf(before)
+            if (place >= 0) backdrop.inside.add(place, pane) else backdrop.inside.add(pane)
+        }
     }
 
     /** The smallest rectangle around every piece at rest, in the backdrop. */
@@ -201,6 +209,7 @@ private class GlassGroup(
 
     fun release(context: GraphicsContext) {
         backdrop.panes.remove(pane)
+        backdrop.inside.remove(pane)
         renderer.release()
         context.releaseGraphicsLayer(picture)
         context.releaseGraphicsLayer(scene.layer)

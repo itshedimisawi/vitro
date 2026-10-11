@@ -116,10 +116,16 @@ internal class GlassNode(
         private set
     private var beneath: State<List<GlassPane>>? = null
     private var container: GlassContainerNode? = null
+
+    /** Whether this glass is part of the content its backdrop records. */
+    var isInside = false
+        private set
     private var redraws by mutableIntStateOf(0)
 
     private var placement by mutableStateOf(Offset.Unspecified)
+    private var placed = Offset.Unspecified
     private var placedAt = 0L
+    private var isHidden = false
     private val stretch = Animatable(Offset.Zero, Offset.VectorConverter)
     private val ownTouch = GlassInteractionState()
     private var touch = interaction ?: ownTouch
@@ -150,7 +156,11 @@ internal class GlassNode(
             watchTone(false)
             pane?.let {
                 this.backdrop.panes.remove(it)
+                this.backdrop.inside.remove(it)
+                isInside = isPartOf(backdrop)
+                it.isContent = isInside
                 backdrop.panes.add(it)
+                if (isInside) backdrop.inside.add(it)
                 beneath = glassBeneath(it, backdrop)
             }
             this.backdrop = backdrop
@@ -173,8 +183,11 @@ internal class GlassNode(
         val context = requireGraphicsContext()
         scene = GlassScene(context.createGraphicsLayer(), backdrop.layer, glass)
         isNight = isNightMode()
+        isInside = isPartOf(backdrop)
         pane = GlassPane(context.createGraphicsLayer(), context.createGraphicsLayer()).also {
+            it.isContent = isInside
             backdrop.panes.add(it)
+            if (isInside) backdrop.inside.add(it)
             beneath = glassBeneath(it, backdrop)
             followTone(it)
         }
@@ -203,6 +216,7 @@ internal class GlassNode(
         scene = null
         pane?.let {
             backdrop.panes.remove(it)
+            backdrop.inside.remove(it)
             requireGraphicsContext().releaseGraphicsLayer(it.surface)
             requireGraphicsContext().releaseGraphicsLayer(it.layer)
         }
@@ -210,6 +224,8 @@ internal class GlassNode(
         beneath = null
         watchTone(false)
         placement = Offset.Unspecified
+        placed = Offset.Unspecified
+        isHidden = false
     }
 
     /** The outline of this glass as [arrange] last left it. */
@@ -258,7 +274,32 @@ internal class GlassNode(
         pane.outline = Rect(shape.origin, measured)
         pane.shade = shape.shade()
         pane.within = enclosingGlass(backdrop, pane.within)
+        pane.clip = if (isInside) clipAround(source, Rect(position, measured)) else null
         return true
+    }
+
+    private fun isOutOfSight(coordinates: LayoutCoordinates): Boolean {
+        val source = backdrop.coordinates ?: return false
+        return source.isAttached && source.localBoundingBoxOf(coordinates, clipBounds = true).isEmpty
+    }
+
+    private fun isPartOf(backdrop: GlassBackdrop): Boolean =
+        (findNearestAncestor(BackdropNode) as? BackdropNode)?.backdrop === backdrop
+
+    // Where the parents of this glass let it show, in the backdrop: open on every side they
+    // leave alone, so shadow and swell still draw past its own bounds there.
+    private fun clipAround(source: LayoutCoordinates, full: Rect): Rect? {
+        val seen = source.localBoundingBoxOf(requireLayoutCoordinates(), clipBounds = true)
+        if (seen.isEmpty) return Rect.Zero
+        val isCut = seen.left > full.left + 0.5f || seen.top > full.top + 0.5f ||
+            seen.right < full.right - 0.5f || seen.bottom < full.bottom - 0.5f
+        if (!isCut) return null
+        return Rect(
+            left = if (seen.left > full.left + 0.5f) seen.left else -Unbounded,
+            top = if (seen.top > full.top + 0.5f) seen.top else -Unbounded,
+            right = if (seen.right < full.right - 0.5f) seen.right else Unbounded,
+            bottom = if (seen.bottom < full.bottom - 0.5f) seen.bottom else Unbounded,
+        )
     }
 
     override fun ContentDrawScope.draw() {
@@ -273,6 +314,12 @@ internal class GlassNode(
         val shift = shape.origin - pane.origin
         val bounds = size
         redraws
+        if (pane.clip?.isEmpty == true) {
+            // Part of the content and out of sight: there is nothing to draw or to show through.
+            pane.bounds = Rect(shape.origin, Size.Zero)
+            pane.view = pane.bounds
+            return
+        }
 
         val around = container
         if (around != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -288,7 +335,7 @@ internal class GlassNode(
                     }
                 }
             }
-            drawLayer(pane.layer)
+            if (!isInside) drawLayer(pane.layer)
             return
         }
 
@@ -319,16 +366,22 @@ internal class GlassNode(
                 }
             }
         }
-        drawLayer(pane.layer)
+        // Glass that is part of the backdrop's content is drawn by the backdrop, over the content.
+        if (!isInside) drawLayer(pane.layer)
     }
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
         val current = coordinates.positionInRoot()
-        val previous = placement
+        val previous = placed
         val now = System.nanoTime()
         val elapsed = (now - placedAt) / 1_000_000f
-        placement = current
+        placed = current
         placedAt = now
+        // Glass in the content that stays out of sight as it moves has nothing to draw again.
+        val wasHidden = isHidden
+        isHidden = isInside && isOutOfSight(coordinates)
+        if (isHidden && wasHidden) return
+        placement = current
         if (glass.isInteractive && previous.isSpecified && current != previous && elapsed > 0f) {
             follow((current - previous) / elapsed)
         }
@@ -457,6 +510,7 @@ internal class GlassNode(
         private val ToneSpring = spring<Float>(dampingRatio = 1f, stiffness = 120f)
         private const val StretchPerVelocity = 0.2f
         private const val MaxStretch = 0.14f
+        private const val Unbounded = 100000f
     }
 }
 

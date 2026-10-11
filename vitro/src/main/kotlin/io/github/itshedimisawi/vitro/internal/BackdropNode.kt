@@ -3,6 +3,8 @@ package io.github.itshedimisawi.vitro.internal
 import android.os.Build
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.node.DrawModifierNode
@@ -10,6 +12,7 @@ import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.TraversableNode
 import androidx.compose.ui.node.requireGraphicsContext
+import androidx.compose.ui.node.requireView
 import androidx.compose.ui.platform.InspectorInfo
 import io.github.itshedimisawi.vitro.GlassBackdrop
 
@@ -44,10 +47,23 @@ internal class BackdropNode(
     override fun ContentDrawScope.draw() {
         backdrop.layer.record { this@draw.drawContent() }
         drawLayer(backdrop.layer)
+        // Glass that is part of the content has kept out of the recording; it goes on top here.
+        for (pane in backdrop.inside) {
+            val clip = pane.clip
+            if (clip == null) {
+                translate(pane.origin.x, pane.origin.y) { drawLayer(pane.layer) }
+            } else if (!clip.isEmpty) {
+                clipRect(clip.left, clip.top, clip.right, clip.bottom) {
+                    translate(pane.origin.x, pane.origin.y) { drawLayer(pane.layer) }
+                }
+            }
+        }
         // Only the snapshot-based renderer needs to be told that the content changed.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) backdrop.generation++
         if (backdrop.toneWatchers > 0) {
-            with(reader) { read(backdrop.layer, requireGraphicsContext(), coroutineScope) }
+            with(reader) { read(backdrop.layer, requireGraphicsContext(), coroutineScope, requireView()) }
+        } else {
+            reader.pause()
         }
     }
 
