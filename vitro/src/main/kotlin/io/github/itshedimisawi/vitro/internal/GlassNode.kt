@@ -3,6 +3,7 @@ package io.github.itshedimisawi.vitro.internal
 import android.content.res.Configuration
 import android.os.Build
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.shape.CornerBasedShape
@@ -13,6 +14,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -124,7 +126,7 @@ internal class GlassNode(
 
     private var placement by mutableStateOf(Offset.Unspecified)
     private var placed = Offset.Unspecified
-    private var placedAt = 0L
+    private var following: Job? = null
     private var isHidden = false
     private val stretch = Animatable(Offset.Zero, Offset.VectorConverter)
     private val ownTouch = GlassInteractionState()
@@ -373,18 +375,13 @@ internal class GlassNode(
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
         val current = coordinates.positionInRoot()
         val previous = placed
-        val now = System.nanoTime()
-        val elapsed = (now - placedAt) / 1_000_000f
         placed = current
-        placedAt = now
         // Glass in the content that stays out of sight as it moves has nothing to draw again.
         val wasHidden = isHidden
         isHidden = isInside && isOutOfSight(coordinates)
         if (isHidden && wasHidden) return
         placement = current
-        if (glass.isInteractive && previous.isSpecified && current != previous && elapsed > 0f) {
-            follow((current - previous) / elapsed)
-        }
+        if (glass.isInteractive && previous.isSpecified && current != previous) follow(previous)
     }
 
     override fun onPointerEvent(
@@ -473,21 +470,42 @@ internal class GlassNode(
         return mode == Configuration.UI_MODE_NIGHT_YES
     }
 
-    private fun follow(velocity: Offset) {
-        val scale = StretchPerVelocity / requireDensity().density
-        val target = Offset(
-            (abs(velocity.x) * scale).coerceAtMost(MaxStretch),
-            (abs(velocity.y) * scale).coerceAtMost(MaxStretch),
-        )
-        coroutineScope.launch {
-            stretch.snapTo((stretch.value + target) / 2f)
-            stretch.animateTo(Offset.Zero, spring(dampingRatio = 0.4f, stiffness = 180f))
+    // Stretches the glass along its own movement for as long as it keeps moving, and lets it
+    // spring back once it stops. Speed is taken from one frame to the next on the frame clock.
+    private fun follow(from: Offset) {
+        if (following?.isActive == true) return
+        following = coroutineScope.launch {
+            val perSpeed = StretchPerVelocity / requireDensity().density
+            var last = from
+            var time = withFrameNanos { it }
+            var stillFrames = 0
+            while (stillFrames < 2) {
+                val now = withFrameNanos { it }
+                val at = placed
+                val elapsed = (now - time) / 1_000_000f
+                if (!at.isSpecified) break
+                if (at == last || elapsed <= 0f) {
+                    stillFrames++
+                } else {
+                    stillFrames = 0
+                    val speed = (at - last) / elapsed
+                    val target = Offset(
+                        (abs(speed.x) * perSpeed).coerceAtMost(MaxStretch),
+                        (abs(speed.y) * perSpeed).coerceAtMost(MaxStretch),
+                    )
+                    launch { stretch.animateTo(target, StretchSpring) }
+                }
+                last = at
+                time = now
+            }
+            stretch.animateTo(Offset.Zero, ReboundSpring)
         }
     }
 
     private fun settle() {
         if (!isAttached) return
         touch.settle(coroutineScope)
+        following?.cancel()
         coroutineScope.launch { stretch.snapTo(Offset.Zero) }
     }
 
@@ -508,6 +526,8 @@ internal class GlassNode(
 
     companion object {
         private val ToneSpring = spring<Float>(dampingRatio = 1f, stiffness = 120f)
+        private val StretchSpring = spring<Offset>(dampingRatio = 1f, stiffness = Spring.StiffnessHigh)
+        private val ReboundSpring = spring<Offset>(dampingRatio = 0.4f, stiffness = 180f)
         private const val StretchPerVelocity = 0.2f
         private const val MaxStretch = 0.14f
         private const val Unbounded = 100000f
