@@ -2,8 +2,6 @@ package io.github.itshedimisawi.vitro.sample.music
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -12,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -42,7 +41,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import io.github.itshedimisawi.vitro.Glass
-import io.github.itshedimisawi.vitro.ScrollEdgeEffectStyle
 import io.github.itshedimisawi.vitro.glassBackdrop
 import io.github.itshedimisawi.vitro.rememberGlassBackdrop
 import io.github.itshedimisawi.vitro.scrollEdgeEffect
@@ -133,21 +131,15 @@ fun MusicApp() {
 
     CompositionLocalProvider(LocalMusicColors provides colors, LocalContentColor provides colors.ink) {
         Box(Modifier.fillMaxSize().background(colors.page)) {
-            // The pages dissolve into the page colour under the status bar. Under the controls
-            // the library does the same, and the pages full of artwork are shaded instead.
-            val covered by animateDpAsState(
-                targetValue = controlsHeight(isCollapsed && !isSearching),
-                animationSpec = spring(dampingRatio = 1f, stiffness = 320f),
-                label = "covered",
-            )
+            // Content is softened under the system bars and under the controls, which the effect
+            // finds by itself.
             Box(
                 Modifier
                     .fillMaxSize()
                     .glassBackdrop(backdrop)
-                    .scrollEdgeEffect(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(), color = colors.page)
                     .scrollEdgeEffect(
-                        bottom = covered,
-                        style = if (tab == LibraryTab && !isSearching) ScrollEdgeEffectStyle.Soft else ScrollEdgeEffectStyle.Shaded,
+                        top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+                        bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
                         color = colors.page,
                     )
                     .background(colors.page)

@@ -50,6 +50,23 @@ internal class BackdropTone private constructor(
         return sum / ((right - left) * (bottom - top))
     }
 
+    /**
+     * Mean luminance of what lies inside [areas], each counted by its size. NaN if none of them
+     * meets the content.
+     */
+    fun luminance(areas: List<Rect>): Float {
+        var sum = 0f
+        var weight = 0f
+        for (area in areas) {
+            val luminance = luminance(area, emptyList())
+            if (!luminance.isNaN()) {
+                sum += luminance * area.width * area.height
+                weight += area.width * area.height
+            }
+        }
+        return if (weight > 0f) sum / weight else Float.NaN
+    }
+
     companion object {
 
         /** Reads a picture of the backdrop drawn at one pixel per [cell] pixels. */
@@ -84,6 +101,16 @@ internal fun darknessOver(luminance: Float, isNight: Boolean): Float {
     return 1f - ((luminance - start) / (end - start)).coerceIn(0f, 1f)
 }
 
+/**
+ * How far content under bars should be shaded instead of dissolved into the page, from 0 to 1,
+ * when what lies under the bars has the given [luminance]. Bars rest on a shade unless the
+ * content under them is nearly as bright as a white page.
+ */
+internal fun shadeOver(luminance: Float): Float =
+    1f - ((luminance - ShadeFull) / (ShadeNone - ShadeFull)).coerceIn(0f, 1f)
+
+private const val ShadeFull = 0.67f
+private const val ShadeNone = 0.74f
 private const val DayFlipStart = 0.0263f
 private const val DayFlipEnd = 0.036f
 private const val NightFlipStart = 0.681f

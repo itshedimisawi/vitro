@@ -115,11 +115,13 @@ Where content scrolls under floating bars, soften it with `scrollEdgeEffect`. Pu
 LazyColumn(
     Modifier
         .glassBackdrop(backdrop)
-        .scrollEdgeEffect(top = statusBarHeight, bottom = barsHeight)
+        .scrollEdgeEffect(top = statusBarHeight, bottom = navigationBarHeight)
 ) { /* content */ }
 ```
 
-`top` and `bottom` are the heights the bars cover. The default `ScrollEdgeEffectStyle.Soft` dissolves content into the page colour (pass `color` if the page is not white or black); `Shaded` darkens it instead and keeps its colours, which suits a light screen full of saturated artwork. In a dark interface this is a large part of how glass bars look: they sit on content that has already been taken down to about a seventh of its brightness.
+The effect finds the bars by itself: glass on the same backdrop that sits at the top or the bottom of the content. `top` and `bottom` are for what is not glass, such as the system bars; glass counts as a bar while the gap between it and the edge, or other bars there, stays under 46 dp and it does not run past the middle of the content.
+
+There are two looks. `Soft` dissolves content into the page colour (pass `color` if the page is not white or black). `Shaded` darkens it and keeps its colours. The default, `Automatic`, chooses per edge from the content: glass rests on a shade unless what is under it is nearly as bright as a white page, and the edge eases from one look to the other as content scrolls by. An edge without glass is always soft. In a dark interface both looks are the same, and they are a large part of how glass bars look there: they sit on content that has already been taken down to about a seventh of its brightness.
 
 ### Rules of thumb
 

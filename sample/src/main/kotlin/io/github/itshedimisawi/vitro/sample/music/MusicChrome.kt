@@ -48,10 +48,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
-import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import io.github.itshedimisawi.vitro.Glass
@@ -82,14 +80,6 @@ private val BottomMargin = 21.dp
 private val SystemBarGap = 8.dp
 
 private val Morph = spring<Float>(dampingRatio = 0.86f, stiffness = 320f)
-
-/** How much of the bottom of the screen the controls cover, up to the top of the highest piece. */
-@Composable
-fun controlsHeight(isCollapsed: Boolean): Dp {
-    val systemBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val floor = max(BottomMargin, systemBar + SystemBarGap)
-    return if (isCollapsed) floor + (BarHeight + SmallSize) / 2 else floor + BarHeight + PlayerGap + PlayerHeight
-}
 
 /**
  * The floating controls of the music screens: tab bar, player and search. They are three pieces
