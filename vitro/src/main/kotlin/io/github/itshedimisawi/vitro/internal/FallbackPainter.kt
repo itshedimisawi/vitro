@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -74,18 +75,21 @@ internal class FallbackPainter {
             val reach = (abs(light.x) * size.width + abs(light.y) * size.height) / 2f
             val lit = center + light * reach
             val far = center - light * reach
+            // The rim follows the shader's: full toward and away from the light, faint across it.
+            // Light glass is pushed toward white by the same share; dark glass, whose glint a
+            // plain stroke cannot follow, keeps a fixed one.
+            val dark = scene.shape.darkness
+            val peak = strength * (LightRim * (1f - dark) + DarkRimStroke * dark)
             drawPath(
                 path = outline,
                 brush = Brush.linearGradient(
-                    0f to glow(0.4f * strength),
-                    0.3f to glow(0.3f * strength),
-                    0.5f to glow(0.02f * strength),
-                    0.7f to glow(0.3f * strength),
-                    1f to glow(0.4f * strength),
+                    0f to glow(peak),
+                    0.5f to glow(peak * RimFloor),
+                    1f to glow(peak),
                     start = lit,
                     end = far,
                 ),
-                style = Stroke(width = 2.3f * density),
+                style = Stroke(width = RimWidth.toPx() * 2f),
             )
             if (bevel > 0f) {
                 drawPath(
@@ -158,6 +162,8 @@ internal class FallbackPainter {
 
     private companion object {
         const val Rings = 5
+        const val DarkRimStroke = 0.4f
+        val RimWidth = 1.dp
         const val ShadowSteps = 10
     }
 }

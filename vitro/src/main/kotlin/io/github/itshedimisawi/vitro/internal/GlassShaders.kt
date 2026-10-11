@@ -137,7 +137,7 @@ half4 main(float2 coord) {
 
     float facing = dot(dir, light);
     float rim = 1.0 - smoothstep(0.75 * density, 1.25 * density, inset);
-    float edge = rim * (0.11 + 0.89 * abs(facing)) * highlight;
+    float edge = rim * ($RimFloor + (1.0 - $RimFloor) * abs(facing)) * highlight;
 
     // Both materials are worked out and mixed, so glass can change from one to the other.
     float veil = brightness;
@@ -153,12 +153,17 @@ half4 main(float2 coord) {
         deep = max(vivid * (1.0 + $DarkGain * veil) + veil * (lift - shade), 0.0);
     }
 
-    // The rim is lit over the veil and keeps the hue of what shows through it: a push toward
-    // white for light glass, a glint that is strongest on dark content for dark glass.
-    float paleLit = clamp(dot(pale, weights), 0.02, 1.0);
-    pale *= 1.0 + $LightRim * edge * (1.0 - paleLit) / paleLit;
-    float deepLit = clamp(dot(deep, weights), 0.02, 1.0);
-    deep *= 1.0 + edge * ($DarkRimGain + $DarkRimLift / deepLit);
+    // The rim is lit over the veil, working from the colour as it would be shown. What shows
+    // through it turns more vivid and brighter: a push toward white for light glass, a glint
+    // that is strongest on dark content for dark glass, which only ever adds light.
+    float3 paleSeen = min(pale, 1.0);
+    float paleLit = clamp(dot(paleSeen, weights), 0.02, 1.0);
+    float3 paleVivid = max(mix(float3(paleLit), paleSeen, 1.0 + $LightRimVivid * edge), 0.0);
+    pale += paleVivid * (1.0 + $LightRim * edge * (1.0 - paleLit) / paleLit) - paleSeen;
+    float3 deepSeen = min(deep, 1.0);
+    float deepLit = clamp(dot(deepSeen, weights), 0.02, 1.0);
+    float3 deepVivid = max(mix(float3(deepLit), deepSeen, 1.0 + $DarkRimVivid * edge), 0.0);
+    deep += max(deepVivid * (1.0 + edge * ($DarkRimGain + $DarkRimLift / deepLit)) - deepSeen, 0.0);
     color = mix(pale, deep, dark);
     color = mix(color, tint.rgb, tint.a);
     color *= 1.0 - dimming;

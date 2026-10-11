@@ -166,6 +166,9 @@ internal const val DarkShadow = 0.15f
 internal const val DarkRimGain = 0.35f
 internal const val DarkRimLift = 0.12f
 internal const val LightRim = 0.91f
+internal const val LightRimVivid = 0.2f
+internal const val DarkRimVivid = 0.58f
+internal const val RimFloor = 0.11f
 internal const val PressGlow = 0.05f
 internal const val PressGlowPerGrowth = 0.35f
 
