@@ -22,14 +22,14 @@ internal class FallbackPainter {
     private val ring = Path()
 
     fun DrawScope.paint(scene: GlassScene, drawBackdrop: DrawScope.() -> Unit) {
-        scale(scene.scaleX, scene.scaleY) { paintMaterial(scene, drawBackdrop) }
+        scale(scene.shape.scaleX, scene.shape.scaleY) { paintMaterial(scene, drawBackdrop) }
     }
 
     private fun DrawScope.paintMaterial(scene: GlassScene, drawBackdrop: DrawScope.() -> Unit) {
         val glass = scene.glass
         drawShadow(scene)
 
-        outline.trace(this, scene.radii, 0f)
+        outline.trace(this, scene.shape.radii, 0f)
         clipPath(outline) {
             val bevel = min(glass.refractionHeight.toPx(), size.minDimension / 2f)
             val depth = glass.refractionAmount.toPx()
@@ -38,7 +38,7 @@ internal class FallbackPainter {
                 for (step in 0 until Rings) {
                     val slope = 1f - (step + 0.5f) / Rings
                     val shift = depth * slope * slope * slope
-                    ring.trace(this, scene.radii, bevel * step / Rings)
+                    ring.trace(this, scene.shape.radii, bevel * step / Rings)
                     clipPath(ring) {
                         scale(
                             scaleX = 1f / max(1f - shift * 2f / size.width, 0.35f),
@@ -47,7 +47,7 @@ internal class FallbackPainter {
                         )
                     }
                 }
-                ring.trace(this, scene.radii, bevel)
+                ring.trace(this, scene.shape.radii, bevel)
                 clipPath(ring, block = drawBackdrop)
             } else {
                 drawBackdrop()
@@ -101,13 +101,13 @@ internal class FallbackPainter {
             }
         }
 
-        val pressure = scene.pressure
+        val pressure = scene.shape.pressure
         if (pressure > 0f) {
             drawRect(
                 Brush.radialGradient(
                     0f to glow(0.2f * pressure),
                     1f to Color.Transparent,
-                    center = scene.touch,
+                    center = scene.shape.touch,
                     radius = max(size.height * 2f, 1f),
                 ),
             )
@@ -118,14 +118,14 @@ internal class FallbackPainter {
     private fun DrawScope.drawShadow(scene: GlassScene) {
         val glass = scene.glass
         val radius = glass.shadowRadius.toPx()
-        val opacity = scene.shadowOpacity()
+        val opacity = scene.shape.shadowOpacity()
         if (opacity <= 0f || radius <= 0f) return
         translate(top = glass.shadowOffset.toPx()) {
             for (step in ShadowSteps downTo 1) {
                 val outer = radius * step / ShadowSteps
                 val inner = radius * (step - 1) / ShadowSteps
                 val alpha = opacity * (falloff(inner, radius) - falloff(outer, radius))
-                ring.trace(this, scene.radii, -outer)
+                ring.trace(this, scene.shape.radii, -outer)
                 drawPath(ring, Color.Black, alpha = alpha.coerceIn(0f, 1f))
             }
         }

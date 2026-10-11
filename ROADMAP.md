@@ -4,10 +4,8 @@ Planned for the iteration after the core material is finalised.
 
 ## Merging and morphing
 
-Nearby glass shapes should blend into one surface and morph between each other, in the way a glass effect container does.
+`glassEffectContainer` joins nearby glass of one material into a single surface, drawn in one pass from a smooth union of the shapes. Still to come:
 
-- A container that owns a group of glass shapes and a `spacing` that decides how close they must be before they start to blend
-- A single shader pass per container that combines the shapes with a smooth union of their distance fields, so the rim, refraction and highlights stay continuous across the join
 - Stable identifiers per shape so a shape that appears, disappears or changes position morphs from and into its neighbours instead of fading
 - A union option that forces several elements to share one glass shape at rest
 - A materialise transition for shapes that are too far apart to morph

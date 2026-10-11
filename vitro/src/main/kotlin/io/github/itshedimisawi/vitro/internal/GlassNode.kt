@@ -29,8 +29,10 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
+import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.currentValueOf
+import androidx.compose.ui.node.findNearestAncestor
 import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.LayoutAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
@@ -39,6 +41,7 @@ import androidx.compose.ui.node.TraversableNode
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireDensity
 import androidx.compose.ui.node.requireGraphicsContext
+import androidx.compose.ui.node.requireLayoutDirection
 import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.node.traverseAncestors
 import androidx.compose.ui.platform.InspectorInfo
@@ -91,9 +94,9 @@ internal class GlassEffectElement(
 }
 
 internal class GlassNode(
-    private var backdrop: GlassBackdrop,
+    backdrop: GlassBackdrop,
     glass: Glass,
-    private var shape: CornerBasedShape,
+    private var corners: CornerBasedShape,
     interaction: GlassInteractionState?,
     private var onAppearanceChanged: ((GlassAppearance) -> Unit)?,
 ) : Modifier.Node(),
@@ -108,8 +111,10 @@ internal class GlassNode(
 
     private var scene: GlassScene? = null
     private var renderer: GlassRenderer? = null
-    private var pane: GlassPane? = null
+    var pane: GlassPane? = null
+        private set
     private var beneath: State<List<GlassPane>>? = null
+    private var container: GlassContainerNode? = null
 
     private var placement by mutableStateOf(Offset.Unspecified)
     private var placedAt = 0L
@@ -118,7 +123,12 @@ internal class GlassNode(
     private var touch = interaction ?: ownTouch
     private var measured = Size.Zero
 
-    private var glass by mutableStateOf(glass)
+    var backdrop = backdrop
+        private set
+    var glass by mutableStateOf(glass)
+        private set
+    var material = glass.material()
+        private set
     private var isNight by mutableStateOf(false)
     private val darkness = Animatable(0f)
     private var toning: Job? = null
@@ -133,6 +143,7 @@ internal class GlassNode(
     ) {
         this.onAppearanceChanged = onAppearanceChanged
         this.glass = glass
+        material = glass.material()
         if (backdrop !== this.backdrop) {
             watchTone(false)
             pane?.let {
@@ -144,7 +155,7 @@ internal class GlassNode(
             pane?.let { followTone(it) }
         }
         watchTone(glass.appearance == GlassAppearance.Automatic)
-        this.shape = shape
+        corners = shape
         touch = interaction ?: ownTouch
         touch.resize(measured, requireDensity().density)
         if (!glass.isInteractive) settle()
@@ -171,9 +182,19 @@ internal class GlassNode(
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> BlurRenderer()
             else -> SnapshotRenderer(context, coroutineScope)
         }
+        // Glass in a container is drawn by it, joined with its neighbours. A piece inside the
+        // content of another piece of the same container stays on its own.
+        val around = findNearestAncestor(GlassContainerNode) as? GlassContainerNode
+        val outer = findNearestAncestor(GlassNode) as? GlassNode
+        if (around != null && around.isJoining && outer?.container !== around) {
+            container = around
+            around.join(this)
+        }
     }
 
     override fun onDetach() {
+        container?.leave(this)
+        container = null
         renderer?.release()
         renderer = null
         scene?.let { requireGraphicsContext().releaseGraphicsLayer(it.layer) }
@@ -189,55 +210,96 @@ internal class GlassNode(
         placement = Offset.Unspecified
     }
 
-    override fun ContentDrawScope.draw() {
+    /** The outline of this glass as [arrange] last left it. */
+    val shape: GlassShape? get() = scene?.shape
+
+    /**
+     * Works out where this glass sits and what the touch on it has done to it, and publishes
+     * that for the glass around it. False while there is nothing to draw.
+     */
+    fun arrange(): Boolean {
         val scene = scene
-        val renderer = renderer
         val pane = pane
         val source = backdrop.coordinates
-        if (scene == null || renderer == null || pane == null || source == null ||
-            !source.isAttached || size.minDimension <= 0f
+        if (scene == null || pane == null || source == null || !isAttached || !source.isAttached ||
+            measured.minDimension <= 0f
         ) {
-            drawContent()
-            return
+            return false
         }
 
         placement
         scene.backdrop = backdrop.layer
         scene.glass = glass
+        val shape = scene.shape
+        shape.glass = glass
         // Held glass swells, drifts toward the finger and stretches along the pull.
         val held = touch.scale
-        val shift = touch.offset
-
         val position = source.localPositionOf(requireLayoutCoordinates(), Offset.Zero)
-        scene.origin = position + shift
+        shape.origin = position + touch.offset
+        shape.size = measured
+        scene.origin = shape.origin
+        scene.extent = measured
         scene.revision = backdrop.generation
         isNight = isNightMode()
-        scene.darkness = darkness.value
+        shape.darkness = darkness.value
         val finger = touch.position
-        scene.touch = Offset(finger.x.coerceIn(0f, size.width), finger.y.coerceIn(0f, size.height))
-        scene.pressure = touch.pressure.coerceAtLeast(0f)
-        scene.glow = scene.pressure * (PressGlow + PressGlowPerGrowth * touch.growth)
-        resolveRadii(scene.radii)
+        shape.touch = Offset(finger.x.coerceIn(0f, measured.width), finger.y.coerceIn(0f, measured.height))
+        shape.pressure = touch.pressure.coerceAtLeast(0f)
+        shape.glow = shape.pressure * (PressGlow + PressGlowPerGrowth * touch.growth)
+        resolveRadii(shape.radii)
 
         val pull = stretch.value
-        scene.scaleX = held.scaleX + pull.x - pull.y * 0.5f
-        scene.scaleY = held.scaleY + pull.y - pull.x * 0.5f
+        shape.scaleX = held.scaleX + pull.x - pull.y * 0.5f
+        shape.scaleY = held.scaleY + pull.y - pull.x * 0.5f
+
+        pane.origin = position
+        pane.outline = Rect(shape.origin, measured)
+        pane.shade = shape.shade()
+        pane.within = enclosingGlass(backdrop, pane.within)
+        return true
+    }
+
+    override fun ContentDrawScope.draw() {
+        val scene = scene
+        val renderer = renderer
+        val pane = pane
+        if (scene == null || renderer == null || pane == null || !arrange()) {
+            drawContent()
+            return
+        }
+        val shape = scene.shape
+        val shift = shape.origin - pane.origin
+        val bounds = size
+
+        val around = container
+        if (around != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // The first piece of a group draws the material for all of them; each adds its content.
+            pane.bounds = shape.grown
+            pane.view = Rect(shape.origin, Size.Zero)
+            pane.surface.record {}
+            with(around) { drawGroupLedBy(this@GlassNode) }
+            pane.layer.record {
+                translate(shift.x, shift.y) {
+                    scale(shape.scaleX, shape.scaleY, pivot = bounds.center) {
+                        this@draw.drawContent()
+                    }
+                }
+            }
+            drawLayer(pane.layer)
+            return
+        }
+
         // Everything this glass draws is kept, so glass placed on top of it can show it too: the
         // material on its own for glass inside this piece, and the whole for the rest.
         // While recording, this scope stands in as its own density, so reading a density from it
         // would never return. The renderer therefore draws with the real one handed to it.
         val screen = requireDensity()
         val direction = layoutDirection
-        val bounds = size
         // Where this glass paints and what it takes in are published before anything is drawn,
         // so each piece knows which of the others it has in view.
         scene.view = with(renderer) { view(scene) }
-        pane.origin = position
-        pane.outline = Rect(scene.origin, size)
-        pane.shade = scene.shade()
         pane.bounds = paintedBounds(scene).translate(scene.origin)
         pane.view = scene.view.translate(scene.origin)
-        pane.within = enclosingGlass(pane.within)
         scene.beneath = beneath?.value.orEmpty()
         scene.enclosing = pane.within
         pane.surface.record {
@@ -248,7 +310,7 @@ internal class GlassNode(
         pane.layer.record {
             drawLayer(pane.surface)
             translate(shift.x, shift.y) {
-                scale(scene.scaleX, scene.scaleY, pivot = bounds.center) {
+                scale(shape.scaleX, shape.scaleY, pivot = bounds.center) {
                     this@draw.drawContent()
                 }
             }
@@ -300,20 +362,6 @@ internal class GlassNode(
                 (other in within || position < index && pane !in other.within) &&
                 other.bounds.overlaps(pane.view)
         }
-    }
-
-    // The glass whose content this piece is part of, outermost first. Returns [known] when
-    // nothing has changed, so the common case of standing alone costs nothing.
-    private fun enclosingGlass(known: List<GlassPane>): List<GlassPane> {
-        var found: ArrayList<GlassPane>? = null
-        traverseAncestors(GlassNode) { ancestor ->
-            (ancestor as GlassNode).pane?.let { outer ->
-                if (outer in backdrop.panes) (found ?: ArrayList<GlassPane>().also { found = it }).add(0, outer)
-            }
-            true
-        }
-        val enclosing = found ?: emptyList()
-        return if (enclosing == known) known else enclosing
     }
 
     private fun watchTone(isWanted: Boolean) {
@@ -381,22 +429,40 @@ internal class GlassNode(
         coroutineScope.launch { stretch.snapTo(Offset.Zero) }
     }
 
-    private fun ContentDrawScope.resolveRadii(target: FloatArray) {
+    private fun resolveRadii(target: FloatArray) {
+        val size = measured
+        val density = requireDensity()
         val limit = size.minDimension / 2f
-        val isLtr = layoutDirection == LayoutDirection.Ltr
-        val topStart = shape.topStart.toPx(size, this).coerceIn(0f, limit)
-        val topEnd = shape.topEnd.toPx(size, this).coerceIn(0f, limit)
-        val bottomEnd = shape.bottomEnd.toPx(size, this).coerceIn(0f, limit)
-        val bottomStart = shape.bottomStart.toPx(size, this).coerceIn(0f, limit)
+        val isLtr = requireLayoutDirection() == LayoutDirection.Ltr
+        val topStart = corners.topStart.toPx(size, density).coerceIn(0f, limit)
+        val topEnd = corners.topEnd.toPx(size, density).coerceIn(0f, limit)
+        val bottomEnd = corners.bottomEnd.toPx(size, density).coerceIn(0f, limit)
+        val bottomStart = corners.bottomStart.toPx(size, density).coerceIn(0f, limit)
         target[0] = if (isLtr) topStart else topEnd
         target[1] = if (isLtr) topEnd else topStart
         target[2] = if (isLtr) bottomEnd else bottomStart
         target[3] = if (isLtr) bottomStart else bottomEnd
     }
 
-    private companion object {
-        val ToneSpring = spring<Float>(dampingRatio = 1f, stiffness = 120f)
-        const val StretchPerVelocity = 0.2f
-        const val MaxStretch = 0.14f
+    companion object {
+        private val ToneSpring = spring<Float>(dampingRatio = 1f, stiffness = 120f)
+        private const val StretchPerVelocity = 0.2f
+        private const val MaxStretch = 0.14f
     }
+}
+
+/**
+ * The glass whose content this node is part of, outermost first. Returns [known] when nothing has
+ * changed, so the common case of standing alone costs nothing.
+ */
+internal fun DelegatableNode.enclosingGlass(backdrop: GlassBackdrop, known: List<GlassPane>): List<GlassPane> {
+    var found: ArrayList<GlassPane>? = null
+    traverseAncestors(GlassNode) { ancestor ->
+        (ancestor as GlassNode).pane?.let { outer ->
+            if (outer in backdrop.panes) (found ?: ArrayList<GlassPane>().also { found = it }).add(0, outer)
+        }
+        true
+    }
+    val enclosing = found ?: emptyList()
+    return if (enclosing == known) known else enclosing
 }

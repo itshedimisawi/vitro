@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassBackdrop
+import io.github.itshedimisawi.vitro.glassEffectContainer
 import io.github.itshedimisawi.vitro.sample.GlassSurface
 import io.github.itshedimisawi.vitro.sample.GlassTab
 import io.github.itshedimisawi.vitro.sample.GlassTabBar
@@ -110,7 +111,7 @@ fun MusicControls(
     val keyboard = WindowInsets.ime
 
     Layout(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().glassEffectContainer(),
         content = {
             GlassTabBar(
                 tabs = tabs,

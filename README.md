@@ -92,6 +92,19 @@ Box(Modifier.glassEffect(backdrop, Glass.Clear.copy(magnification = 0.9f))) // s
 
 `magnification` scales what is seen through the glass about its centre. Below 1 the glass takes in a wider area than it covers, which keeps the edges of whatever lies under it in view. Glass placed inside the content of another piece of glass sees that piece's material under it, without the content it is itself part of. Which piece counts as on top follows the order the glass is added, not `zIndex`.
 
+### Glass that flows together
+
+Put `glassEffectContainer` on the parent of controls that sit close together or move into one another. The glass below it is then drawn as one surface: pieces that come closer than `spacing` reach for each other and join, with the rim, the refraction and the shadow running unbroken across the join.
+
+```kotlin
+Row(Modifier.glassEffectContainer(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    IconButton(onClick = {}, Modifier.glassEffect(backdrop, Glass.Regular.interactive())) { /* ... */ }
+    IconButton(onClick = {}, Modifier.glassEffect(backdrop, Glass.Regular.interactive())) { /* ... */ }
+}
+```
+
+Only pieces of the same material join: they must share a backdrop and their optical properties. Tint, dimming, appearance and shadow opacity may differ and blend from one piece to the next. Pieces of another material in the same container are drawn alongside without joining. Joining needs Android 13; earlier versions draw each piece on its own.
+
 ### Light and dark
 
 Glass follows the system dark theme by default and gives way to the content behind it at the far end: over near-black content it turns dark in a light interface, and over near-white content it turns light in a dark one, easing from one material to the other. What counts is the light the content gives off, so deep saturated colours and photos with bright spots keep light glass light. Light glass is veiled toward white; dark glass stays close to the colours behind it and only lifts the darkest tones. Force either one with `copy(appearance = GlassAppearance.Dark)`.

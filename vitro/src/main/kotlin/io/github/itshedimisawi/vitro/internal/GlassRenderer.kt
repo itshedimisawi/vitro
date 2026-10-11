@@ -2,6 +2,7 @@ package io.github.itshedimisawi.vitro.internal
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -9,6 +10,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.unit.Dp
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassPane
 import kotlin.math.ceil
@@ -16,27 +18,54 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
+/**
+ * One piece of glass as it is drawn now: where its outline sits in the backdrop, its size at rest
+ * and how the touch on it has changed it.
+ */
+internal class GlassShape(var glass: Glass) {
+    var origin: Offset = Offset.Zero
+    var size: Size = Size.Zero
+    val radii: FloatArray = FloatArray(4)
+    var scaleX: Float = 1f
+    var scaleY: Float = 1f
+    var touch: Offset = Offset.Zero
+    var pressure: Float = 0f
+    var glow: Float = 0f
+    // 0 for the light material, 1 for the dark one, in between while it changes over.
+    var darkness: Float = 0f
+
+    /** The outline at the size it is drawn, in the backdrop. */
+    val grown: Rect
+        get() {
+            val halfWidth = size.width * scaleX / 2f
+            val halfHeight = size.height * scaleY / 2f
+            val centre = origin + Offset(size.width / 2f, size.height / 2f)
+            return Rect(centre.x - halfWidth, centre.y - halfHeight, centre.x + halfWidth, centre.y + halfHeight)
+        }
+}
+
+/**
+ * What a renderer draws in one go: a single [shape], or several [shapes] of the same material
+ * that flow into one another where they come closer than [spacing]. Everything is laid out in a
+ * frame of [extent] whose corner sits at [origin] in the backdrop.
+ */
 internal class GlassScene(
     val layer: GraphicsLayer,
     var backdrop: GraphicsLayer,
     var glass: Glass,
 ) {
+    val shape = GlassShape(glass)
+    var shapes: List<GlassShape> = listOf(shape)
+    var spacing: Float = 0f
+    var origin: Offset = Offset.Zero
+    var extent: Size = Size.Zero
     // Glass lying under this one that paints inside `view`, lowest first, and those among them
     // that this glass is inside of.
     var beneath: List<GlassPane> = emptyList()
     var enclosing: List<GlassPane> = emptyList()
-    var origin: Offset = Offset.Zero
-    // What this glass takes in of the backdrop, measured from its own corner.
+    // What this glass takes in of the backdrop, measured from the corner of its frame.
     var view: Rect = Rect.Zero
-    var touch: Offset = Offset.Zero
-    var pressure: Float = 0f
-    var glow: Float = 0f
     var revision: Int = 0
-    // 0 for the light material, 1 for the dark one, in between while it changes over.
-    var darkness: Float = 0f
-    var scaleX: Float = 1f
-    var scaleY: Float = 1f
-    val radii: FloatArray = FloatArray(4)
 }
 
 /**
@@ -58,24 +87,62 @@ internal fun DrawScope.drawView(scene: GlassScene) {
 /** The glass itself and a border as wide as its blur, which softening the edge draws on. */
 internal fun DrawScope.blurredView(scene: GlassScene): Rect {
     val margin = ceil(scene.glass.blurRadius.toPx())
-    return Rect(-margin, -margin, ceil(size.width) + margin, ceil(size.height) + margin)
+    return Rect(-margin, -margin, ceil(scene.extent.width) + margin, ceil(scene.extent.height) + margin)
 }
 
 /**
- * The area a piece of glass paints on, measured from its own corner: its outline at the size it
+ * The area a scene paints on, measured from the corner of its frame: every outline at the size it
  * is drawn, and the shadow around and below it.
  */
 internal fun DrawScope.paintedBounds(scene: GlassScene): Rect {
-    val halfWidth = size.width * scene.scaleX / 2f
-    val halfHeight = size.height * scene.scaleY / 2f
-    val outline = Rect(center.x - halfWidth, center.y - halfHeight, center.x + halfWidth, center.y + halfHeight)
     val radius = scene.glass.shadowRadius.toPx()
-    if (scene.shadowOpacity() <= 0f || radius <= 0f) return outline
-    val grown = maxOf(scene.scaleX, scene.scaleY, 1f)
-    val spread = radius * grown
-    val drop = scene.glass.shadowOffset.toPx() * grown
-    return Rect(outline.left - spread, outline.top - spread, outline.right + spread, outline.bottom + spread + drop)
+    val offset = scene.glass.shadowOffset.toPx()
+    var left = Float.POSITIVE_INFINITY
+    var top = Float.POSITIVE_INFINITY
+    var right = Float.NEGATIVE_INFINITY
+    var bottom = Float.NEGATIVE_INFINITY
+    for (shape in scene.shapes) {
+        val outline = shape.grown
+        val isShadowed = shape.shadowOpacity() > 0f && radius > 0f
+        val grown = maxOf(shape.scaleX, shape.scaleY, 1f)
+        val spread = if (isShadowed) radius * grown else 0f
+        val drop = if (isShadowed) offset * grown else 0f
+        left = min(left, outline.left - spread)
+        top = min(top, outline.top - spread)
+        right = max(right, outline.right + spread)
+        bottom = max(bottom, outline.bottom + spread + drop)
+    }
+    return Rect(left, top, right, bottom).translate(-scene.origin.x, -scene.origin.y)
 }
+
+/** What pieces of glass must have in common to be drawn as one. */
+internal data class GlassMaterial(
+    val blurRadius: Dp,
+    val refractionHeight: Dp,
+    val refractionAmount: Dp,
+    val dispersion: Float,
+    val magnification: Float,
+    val saturation: Float,
+    val brightness: Float,
+    val lightAngle: Float,
+    val highlightIntensity: Float,
+    val shadowRadius: Dp,
+    val shadowOffset: Dp,
+)
+
+internal fun Glass.material(): GlassMaterial = GlassMaterial(
+    blurRadius = blurRadius,
+    refractionHeight = refractionHeight,
+    refractionAmount = refractionAmount,
+    dispersion = dispersion,
+    magnification = magnification,
+    saturation = saturation,
+    brightness = brightness,
+    lightAngle = lightAngle,
+    highlightIntensity = highlightIntensity,
+    shadowRadius = shadowRadius,
+    shadowOffset = shadowOffset,
+)
 
 internal interface GlassRenderer {
 
@@ -166,7 +233,7 @@ internal data class GlassShade(
     }
 }
 
-internal fun GlassScene.shade(): GlassShade {
+internal fun GlassShape.shade(): GlassShade {
     val tint = glass.tint
     val isTinted = tint.isSpecified
     return GlassShade(
@@ -197,12 +264,12 @@ private val DarkLine: Pair<Float, Float> by lazy {
     (sumBend / (steps + 1) - slope * 0.5f) to -slope
 }
 
-internal fun GlassScene.shadowOpacity(): Float =
+internal fun GlassShape.shadowOpacity(): Float =
     glass.shadowOpacity * (1f + (DarkShadow - 1f) * darkness)
 
 internal fun ColorMatrix.setToMaterial(scene: GlassScene) {
     val veil = scene.glass.brightness.coerceIn(0f, 1f)
-    val dark = scene.darkness
+    val dark = scene.shape.darkness
     val light = 1f - dark
     val saturation = scene.glass.saturation * (1f - LightWash * veil * light) * (1f + DarkVivid * veil * dark)
     val gain = 1f + DarkGain * veil * dark
