@@ -16,9 +16,11 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import io.github.itshedimisawi.vitro.Glass
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 @RequiresApi(33)
 internal class ShaderRenderer : GlassRenderer {
@@ -61,9 +63,10 @@ internal class ShaderRenderer : GlassRenderer {
     // also reaches past its own outline.
     override fun DrawScope.view(scene: GlassScene): Rect {
         val reach = 1f / scene.glass.magnification.coerceIn(MinMagnification, 1f)
+        val border = blurBorder(scene.glass)
         val needed = IntSize(
-            ceil(scene.extent.width).toInt() + 2 * overhang(scene, reach, isWide = true),
-            ceil(scene.extent.height).toInt() + 2 * overhang(scene, reach, isWide = false),
+            ceil(scene.extent.width).toInt() + 2 * (overhang(scene, reach, isWide = true) + border),
+            ceil(scene.extent.height).toInt() + 2 * (overhang(scene, reach, isWide = false) + border),
         )
         // A layer is given a new buffer whenever its size changes, so while the glass is changing
         // size the layer only grows, a step at a time, and takes its exact size once it rests.
@@ -73,12 +76,38 @@ internal class ShaderRenderer : GlassRenderer {
             else -> IntSize(roomFor(needed.width, held.width, room), roomFor(needed.height, held.height, room))
         }
         wanted = needed
+        scene.isSettled = held == needed
         val left = -((held.width - ceil(scene.extent.width).toInt()) / 2).toFloat()
         val top = -((held.height - ceil(scene.extent.height).toInt()) / 2).toFloat()
         return Rect(left, top, left + held.width, top + held.height)
     }
 
     private fun roomFor(needed: Int, held: Int, room: Int): Int = if (needed <= held) held else needed + room
+
+    /**
+     * How far past the outline the view must reach for the blur to be right. Softening a pixel
+     * draws on its surroundings, and past the edge of the view there is nothing but the edge
+     * repeated. The rim only shows content from further in, so a light blur never looks that far
+     * out and needs no border; a heavy one does.
+     */
+    private fun DrawScope.blurBorder(glass: Glass): Int {
+        val blur = glass.blurRadius.toPx()
+        if (blur <= 0f) return 0
+        val spread = BlurReach * (blur * BlurSigmaPerRadius + BlurSigmaBase)
+        return ceil(spread - nearestSample(glass)).toInt().coerceAtLeast(0)
+    }
+
+    // The least distance from the outline at which the material samples the backdrop: the rim at
+    // inset d shows content from d + amount x (1 - d / height)^3 further in.
+    private fun DrawScope.nearestSample(glass: Glass): Float {
+        if (glass.magnification < 1f) return 0f
+        val height = glass.refractionHeight.toPx()
+        val amount = glass.refractionAmount.toPx() * (1f - 2f * glass.dispersion.coerceAtLeast(0f))
+        if (height <= 0f || amount <= 0f) return 0f
+        if (amount <= height / 3f) return amount
+        val slope = sqrt(height / (3f * amount))
+        return height * (1f - slope) + amount * slope * slope * slope
+    }
 
     private fun DrawScope.drawMaterial(scene: GlassScene) {
         val glass = scene.glass
@@ -162,4 +191,9 @@ internal class ShaderRenderer : GlassRenderer {
 
 internal const val TintStrength = 0.85f
 private val GrowthRoom = 16.dp
+
+// The platform blur is a Gaussian of this deviation for a given radius, cut off three deviations out.
+private const val BlurSigmaPerRadius = 0.57735f
+private const val BlurSigmaBase = 0.5f
+private const val BlurReach = 3f
 private const val MinMagnification = 0.5f

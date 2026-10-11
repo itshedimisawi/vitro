@@ -83,19 +83,20 @@ internal class GlassContainerNode(spacing: Dp) : Modifier.Node(), TraversableNod
 
     /**
      * Draws the material of the group that [lead] is the first piece of, in the scope [lead] is
-     * drawing in. Does nothing for the other pieces of a group.
+     * drawing in. Does nothing for the other pieces of a group. False if the group should be
+     * drawn once more, because its renderer has room to give back.
      */
     @RequiresApi(33)
-    fun ContentDrawScope.drawGroupLedBy(lead: GlassNode) {
+    fun ContentDrawScope.drawGroupLedBy(lead: GlassNode): Boolean {
         regroup(requireGraphicsContext())
-        val group = groups.firstOrNull { it.members.firstOrNull() === lead } ?: return
-        val position = lead.pane?.origin ?: return
+        val group = groups.firstOrNull { it.members.firstOrNull() === lead } ?: return true
+        val position = lead.pane?.origin ?: return true
 
         group.shapes.clear()
         for (member in group.members) {
             if (member.arrange()) member.shape?.let { group.shapes += it }
         }
-        if (group.shapes.isEmpty()) return
+        if (group.shapes.isEmpty()) return true
 
         val scene = group.scene
         val frame = group.frame()
@@ -126,6 +127,7 @@ internal class GlassContainerNode(spacing: Dp) : Modifier.Node(), TraversableNod
             }
         }
         drawLayer(pane.surface)
+        return scene.isSettled
     }
 
     // Pieces are drawn together when they share a backdrop and a material. A group that would

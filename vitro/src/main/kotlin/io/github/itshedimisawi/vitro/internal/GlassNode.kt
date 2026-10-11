@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -115,6 +116,7 @@ internal class GlassNode(
         private set
     private var beneath: State<List<GlassPane>>? = null
     private var container: GlassContainerNode? = null
+    private var redraws by mutableIntStateOf(0)
 
     private var placement by mutableStateOf(Offset.Unspecified)
     private var placedAt = 0L
@@ -270,6 +272,7 @@ internal class GlassNode(
         val shape = scene.shape
         val shift = shape.origin - pane.origin
         val bounds = size
+        redraws
 
         val around = container
         if (around != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -277,7 +280,7 @@ internal class GlassNode(
             pane.bounds = shape.grown
             pane.view = Rect(shape.origin, Size.Zero)
             pane.surface.record {}
-            with(around) { drawGroupLedBy(this@GlassNode) }
+            if (!with(around) { drawGroupLedBy(this@GlassNode) }) drawAgain()
             pane.layer.record {
                 translate(shift.x, shift.y) {
                     scale(shape.scaleX, shape.scaleY, pivot = bounds.center) {
@@ -307,6 +310,7 @@ internal class GlassNode(
                 translate(shift.x, shift.y) { with(renderer) { render(scene) } }
             }
         }
+        if (!scene.isSettled) drawAgain()
         pane.layer.record {
             drawLayer(pane.surface)
             translate(shift.x, shift.y) {
@@ -362,6 +366,11 @@ internal class GlassNode(
                 (other in within || position < index && pane !in other.within) &&
                 other.bounds.overlaps(pane.view)
         }
+    }
+
+    // Asks for one more drawing once this one is over, for a renderer that has room to give back.
+    private fun drawAgain() {
+        coroutineScope.launch { redraws++ }
     }
 
     private fun watchTone(isWanted: Boolean) {

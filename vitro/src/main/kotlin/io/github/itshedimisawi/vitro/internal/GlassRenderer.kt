@@ -66,6 +66,9 @@ internal class GlassScene(
     // What this glass takes in of the backdrop, measured from the corner of its frame.
     var view: Rect = Rect.Zero
     var revision: Int = 0
+    // False while the renderer is holding more room than this scene needs, which it gives back
+    // the next time it draws.
+    var isSettled: Boolean = true
 }
 
 /**
