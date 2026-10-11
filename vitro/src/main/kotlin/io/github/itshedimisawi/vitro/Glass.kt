@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
  * a strong prism-like fringe. Interactive glass adds its own fringe while pressed.
  * @property magnification Size of the content seen through the glass, scaled about its centre. 1
  * shows it at its true size; below 1 shrinks it, so the glass takes in a wider area, edges of what
- * lies under it included; above 1 enlarges it.
+ * lies under it included; above 1 enlarges it. Values below 0.5 count as 0.5.
  * @property saturation Colour intensity of content seen through the glass, where 1 leaves it
  * unchanged.
  * @property brightness How strongly the luminosity of content seen through the glass is adjusted

@@ -62,7 +62,7 @@ internal class ShaderRenderer : GlassRenderer {
     // behind its larger footprint instead of a magnified copy. Glass that shrinks what it shows
     // also reaches past its own outline.
     override fun DrawScope.view(scene: GlassScene): Rect {
-        val reach = 1f / scene.glass.magnification.coerceIn(MinMagnification, 1f)
+        val reach = 1f / scene.glass.shownScale().coerceAtMost(1f)
         val border = blurBorder(scene.glass)
         val needed = IntSize(
             ceil(scene.extent.width).toInt() + 2 * (overhang(scene, reach, isWide = true) + border),
@@ -135,7 +135,7 @@ internal class ShaderRenderer : GlassRenderer {
         material.setFloatUniform("bevel", glass.refractionHeight.toPx())
         material.setFloatUniform("depth", glass.refractionAmount.toPx())
         material.setFloatUniform("dispersion", glass.dispersion)
-        material.setFloatUniform("zoom", 1f / glass.magnification.coerceAtLeast(MinMagnification))
+        material.setFloatUniform("zoom", 1f / glass.shownScale())
         material.setFloatUniform("saturation", glass.saturation)
         material.setFloatUniform("brightness", glass.brightness.coerceIn(-1f, 1f))
         material.setFloatUniform("light", light.x, light.y)
@@ -196,4 +196,3 @@ private val GrowthRoom = 16.dp
 private const val BlurSigmaPerRadius = 0.57735f
 private const val BlurSigmaBase = 0.5f
 private const val BlurReach = 3f
-private const val MinMagnification = 0.5f

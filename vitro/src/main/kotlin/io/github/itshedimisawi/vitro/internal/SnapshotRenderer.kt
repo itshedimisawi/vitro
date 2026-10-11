@@ -39,8 +39,10 @@ internal class SnapshotRenderer(
 
     private var frame by mutableStateOf<ImageBitmap?>(null)
     private var frameOrigin = Offset.Zero
+    private var frameView = Rect.Zero
     private var requested = 0
     private var wantedOrigin = Offset.Zero
+    private var wantedView = Rect.Zero
     private var wantedRadius = 0f
     private var isStale = false
     private var job: Job? = null
@@ -52,7 +54,6 @@ internal class SnapshotRenderer(
         val blur = glass.blurRadius.toPx()
         val reduction = (blur / 3f).coerceIn(1f, 8f)
         val view = scene.view
-        val margin = -view.left.toInt()
         val width = view.width.toInt()
         val height = view.height.toInt()
 
@@ -64,11 +65,12 @@ internal class SnapshotRenderer(
 
         var key = scene.revision
         key = 31 * key + scene.origin.hashCode()
-        key = 31 * key + size.hashCode()
+        key = 31 * key + view.hashCode()
         key = 31 * key + blur.hashCode()
         if (key != requested) {
             requested = key
             wantedOrigin = scene.origin
+            wantedView = view
             wantedRadius = blur / reduction
             refresh()
         }
@@ -80,15 +82,16 @@ internal class SnapshotRenderer(
                 if (image == null) {
                     translate(view.left, view.top) { drawView(scene) }
                 } else {
-                    // Keeps a slightly late snapshot pinned to the content while the glass moves.
+                    // Keeps a slightly late snapshot pinned to the content while the glass moves
+                    // or changes size: it is drawn where it was taken.
                     val drift = frameOrigin - scene.origin
                     drawImage(
                         image = image,
                         dstOffset = IntOffset(
-                            (drift.x - margin).roundToInt(),
-                            (drift.y - margin).roundToInt(),
+                            (drift.x + frameView.left).roundToInt(),
+                            (drift.y + frameView.top).roundToInt(),
                         ),
-                        dstSize = IntSize(width, height),
+                        dstSize = IntSize(frameView.width.toInt(), frameView.height.toInt()),
                         colorFilter = ColorFilter.colorMatrix(vivid),
                         filterQuality = FilterQuality.Low,
                     )
@@ -109,10 +112,12 @@ internal class SnapshotRenderer(
             while (isStale) {
                 isStale = false
                 val origin = wantedOrigin
+                val taken = wantedView
                 val radius = wantedRadius
                 val shot = capture.toImageBitmap()
                 val softened = withContext(Dispatchers.Default) { soften(shot, radius) }
                 frameOrigin = origin
+                frameView = taken
                 frame = softened
             }
         }

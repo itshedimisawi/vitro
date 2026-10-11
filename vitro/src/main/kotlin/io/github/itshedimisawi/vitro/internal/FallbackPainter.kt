@@ -22,8 +22,14 @@ internal class FallbackPainter {
     private val outline = Path()
     private val ring = Path()
 
+    // The outline is drawn at the size the touch has given it, while what shows through keeps
+    // its own size, set by the magnification alone: pressed glass uncovers more of the backdrop.
     fun DrawScope.paint(scene: GlassScene, drawBackdrop: DrawScope.() -> Unit) {
-        scale(scene.shape.scaleX, scene.shape.scaleY) { paintMaterial(scene, drawBackdrop) }
+        val shape = scene.shape
+        val shown = scene.glass.shownScale()
+        scale(shape.scaleX, shape.scaleY) {
+            paintMaterial(scene) { scale(shown / shape.scaleX, shown / shape.scaleY, block = drawBackdrop) }
+        }
     }
 
     private fun DrawScope.paintMaterial(scene: GlassScene, drawBackdrop: DrawScope.() -> Unit) {

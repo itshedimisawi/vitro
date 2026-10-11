@@ -87,11 +87,22 @@ internal fun DrawScope.drawView(scene: GlassScene) {
     }
 }
 
-/** The glass itself and a border as wide as its blur, which softening the edge draws on. */
+/**
+ * What the fallback renderers take in: the outline at the size it is drawn, widened for glass
+ * that shrinks what it shows, and a border as wide as the blur, which softening the edge draws on.
+ */
 internal fun DrawScope.blurredView(scene: GlassScene): Rect {
     val margin = ceil(scene.glass.blurRadius.toPx())
-    return Rect(-margin, -margin, ceil(scene.extent.width) + margin, ceil(scene.extent.height) + margin)
+    val reach = 1f / scene.glass.shownScale().coerceAtMost(1f)
+    val marginX = margin + ceil(max(scene.extent.width * (scene.shape.scaleX * reach - 1f) / 2f, 0f))
+    val marginY = margin + ceil(max(scene.extent.height * (scene.shape.scaleY * reach - 1f) / 2f, 0f))
+    return Rect(-marginX, -marginY, ceil(scene.extent.width) + marginX, ceil(scene.extent.height) + marginY)
 }
+
+/** The size content is shown at through this glass, which never shrinks it below half. */
+internal fun Glass.shownScale(): Float = magnification.coerceAtLeast(MinMagnification)
+
+internal const val MinMagnification = 0.5f
 
 /**
  * The area a scene paints on, measured from the corner of its frame: every outline at the size it
