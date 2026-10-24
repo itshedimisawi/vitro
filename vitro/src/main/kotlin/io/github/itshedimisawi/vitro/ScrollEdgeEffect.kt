@@ -1,33 +1,48 @@
 package io.github.itshedimisawi.vitro
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
-import io.github.itshedimisawi.vitro.internal.ScrollEdgeElement
+import io.github.itshedimisawi.vitro.internal.node.ScrollEdgeElement
 
 /**
  * How content is softened where it runs under bars at the top or bottom of a screen.
  */
-public enum class ScrollEdgeEffectStyle {
+@Immutable
+@JvmInline
+public value class ScrollEdgeEffectStyle private constructor(private val value: Int) {
 
-    /**
-     * Each edge picks its look from what is there. Under glass, content that is darker than a
-     * pale page is [Shaded], and the edge eases to [Soft] when the content under the glass turns
-     * bright. An edge with no glass at it, such as one that only clears the status bar, is [Soft].
-     */
-    Automatic,
+    override fun toString(): String = when (this) {
+        Automatic -> "Automatic"
+        Soft -> "Soft"
+        Shaded -> "Shaded"
+        else -> "Unknown"
+    }
 
-    /**
-     * Content dissolves into the colour of the page: toward white on a light page, toward black
-     * on a dark one. Bars floating over it then sit on a calm surface whatever scrolls past.
-     */
-    Soft,
+    public companion object {
 
-    /**
-     * Content is darkened and keeps its colours. On a dark page this is the same as [Soft]; on a
-     * light page it is a gentle shade that suits a screen full of saturated artwork.
-     */
-    Shaded,
+        /**
+         * Each edge picks its look from what is there. Under glass, content that is darker than a
+         * pale page is [Shaded], and the edge eases to [Soft] when the content under the glass
+         * turns bright. An edge with no glass at it, such as one that only clears the status bar,
+         * is [Soft].
+         */
+        public val Automatic: ScrollEdgeEffectStyle = ScrollEdgeEffectStyle(0)
+
+        /**
+         * Content dissolves into the colour of the page: toward white on a light page, toward
+         * black on a dark one. Bars floating over it then sit on a calm surface whatever scrolls
+         * past.
+         */
+        public val Soft: ScrollEdgeEffectStyle = ScrollEdgeEffectStyle(1)
+
+        /**
+         * Content is darkened and keeps its colours. On a dark page this is the same as [Soft]; on
+         * a light page it is a gentle shade that suits a screen full of saturated artwork.
+         */
+        public val Shaded: ScrollEdgeEffectStyle = ScrollEdgeEffectStyle(2)
+    }
 }
 
 /**
@@ -52,10 +67,15 @@ public enum class ScrollEdgeEffectStyle {
  * [ScrollEdgeEffectStyle.Automatic].
  * @param color Colour of the page, which [ScrollEdgeEffectStyle.Soft] dissolves content into.
  * Unspecified means white in a light interface and black in a dark one.
+ * @param isTopHidden Whether the top edge is left unsoftened, for example while artwork meant to
+ * show in full sits under the bars. The edge fades out and back in when this changes.
+ * @param isBottomHidden Whether the bottom edge is left unsoftened, in the same way.
  */
 public fun Modifier.scrollEdgeEffect(
     top: Dp = Dp.Unspecified,
     bottom: Dp = Dp.Unspecified,
     style: ScrollEdgeEffectStyle = ScrollEdgeEffectStyle.Automatic,
     color: Color = Color.Unspecified,
-): Modifier = this then ScrollEdgeElement(top, bottom, style, color)
+    isTopHidden: Boolean = false,
+    isBottomHidden: Boolean = false,
+): Modifier = this then ScrollEdgeElement(top, bottom, style, color, isTopHidden, isBottomHidden)

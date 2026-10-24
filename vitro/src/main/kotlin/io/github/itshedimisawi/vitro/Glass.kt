@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.dp
  * Configuration of the glass material rendered by [glassEffect].
  *
  * Start from [Glass.Regular] or [Glass.Clear] and refine with [tint], [interactive], [dimmed] or
- * [copy]. Instances are immutable and safe to share.
+ * [copy]. [Glass.Identity] turns the effect off. Instances are immutable and safe to share.
  *
  * @property blurRadius How strongly content behind the glass is blurred.
  * @property refractionHeight Width of the curved rim, measured inward from the edge, where content
@@ -54,6 +54,7 @@ public class Glass private constructor(
     public val shadowOffset: Dp,
     public val shadowOpacity: Float,
     public val isInteractive: Boolean,
+    internal val isIdentity: Boolean = false,
 ) {
 
     /**
@@ -116,6 +117,7 @@ public class Glass private constructor(
         shadowOffset = shadowOffset,
         shadowOpacity = shadowOpacity,
         isInteractive = isInteractive,
+        isIdentity = isIdentity,
     )
 
     override fun equals(other: Any?): Boolean {
@@ -136,7 +138,8 @@ public class Glass private constructor(
             shadowRadius == other.shadowRadius &&
             shadowOffset == other.shadowOffset &&
             shadowOpacity == other.shadowOpacity &&
-            isInteractive == other.isInteractive
+            isInteractive == other.isInteractive &&
+            isIdentity == other.isIdentity
     }
 
     override fun hashCode(): Int {
@@ -156,10 +159,11 @@ public class Glass private constructor(
         result = 31 * result + shadowOffset.hashCode()
         result = 31 * result + shadowOpacity.hashCode()
         result = 31 * result + isInteractive.hashCode()
+        result = 31 * result + isIdentity.hashCode()
         return result
     }
 
-    override fun toString(): String =
+    override fun toString(): String = if (isIdentity) "Glass.Identity" else
         "Glass(blurRadius=$blurRadius, refractionHeight=$refractionHeight, " +
             "refractionAmount=$refractionAmount, dispersion=$dispersion, " +
             "magnification=$magnification, " +
@@ -203,5 +207,18 @@ public class Glass private constructor(
             saturation = 1f,
             brightness = 0.1f,
         )
+
+        /**
+         * Leaves the content as it is, with no material, shadow or lensing, as if no glass were
+         * applied. Use it to switch glass off without changing the modifier chain, for example
+         * when transparency should be reduced. Builders and [copy] keep it the identity.
+         */
+        public val Identity: Glass = with(Regular) {
+            Glass(
+                blurRadius, refractionHeight, refractionAmount, dispersion, magnification, saturation,
+                brightness, appearance, tint, dimming, lightAngle, highlightIntensity, shadowRadius,
+                shadowOffset, shadowOpacity, isInteractive, isIdentity = true,
+            )
+        }
     }
 }

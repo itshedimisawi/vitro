@@ -2,96 +2,108 @@ package io.github.itshedimisawi.vitro.sample
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Contrast
-import androidx.compose.material.icons.rounded.PhotoLibrary
-import androidx.compose.material.icons.rounded.Science
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
-import io.github.itshedimisawi.vitro.Glass
-import io.github.itshedimisawi.vitro.GlassAppearance
-import io.github.itshedimisawi.vitro.rememberGlassBackdrop
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContent { SampleApp() }
+        setContent { ShowcaseApp() }
     }
 }
 
 val Ink = Color(0xFF111111)
-val Accent = Color(0xFF0088FF)
 
-fun appearanceFor(isDark: Boolean): GlassAppearance =
-    if (isDark) GlassAppearance.Dark else GlassAppearance.Light
+// Page, cards, fills and secondary text in the iOS system colours. Primary marks a selection and
+// secondary is its lighter edge, both from the showcase palette; tertiary is the rating star.
+private val DarkColors = darkColorScheme(
+    primary = Color(0xFF6F9DB8),
+    secondary = Color(0xFF86B4CB),
+    background = Color.Black,
+    onBackground = Color.White,
+    surface = Color(0xFF1C1C1E),
+    onSurface = Color.White,
+    surfaceVariant = Color(0xFF3A3A3C),
+    onSurfaceVariant = Color(0xFF8E8E93),
+    tertiary = Color(0xFF86B4CB),
+)
+private val LightColors = lightColorScheme(
+    primary = Color(0xFF2F4D65),
+    secondary = Color(0xFF6F9DB8),
+    background = Color.White,
+    onBackground = Color.Black,
+    surface = Color(0xFFF2F2F7),
+    onSurface = Color.Black,
+    surfaceVariant = Color(0xFFD1D1D6),
+    onSurfaceVariant = Color(0xFF8A8A8E),
+    tertiary = Color(0xFF2F4D65),
+)
 
-enum class Demo(val title: String, val icon: ImageVector) {
-    Photos("Photos", Icons.Rounded.PhotoLibrary),
-    Showcase("Showcase", Icons.Rounded.AutoAwesome),
-    Solid("Solid", Icons.Rounded.Contrast),
-    Playground("Tune", Icons.Rounded.Tune),
-    Patterns("Test", Icons.Rounded.Science),
-}
-
-private val Tabs = Demo.entries.map { GlassTab(it.title, it.icon, badge = if (it == Demo.Patterns) 1 else 0) }
+enum class Screen { Movie, Seats, Ticket }
 
 @Composable
-fun SampleApp() {
-    var demo by rememberSaveable { mutableStateOf(Demo.Photos) }
-    var isSolidLight by rememberSaveable { mutableStateOf(false) }
-    val backdrop = rememberGlassBackdrop()
-    // The solid screen has its own light and dark switch; everywhere else the bar is left to
-    // pick its material from the theme and what scrolls under it.
-    val barGlass = if (demo == Demo.Solid) {
-        Glass.Regular.copy(appearance = appearanceFor(!isSolidLight))
-    } else {
-        Glass.Regular
-    }
+fun ShowcaseApp() {
+    var screen by rememberSaveable { mutableStateOf(Screen.Movie) }
+    var day by rememberSaveable { mutableIntStateOf(0) }
+    var time by rememberSaveable { mutableIntStateOf(2) }
+    var seats by rememberSaveable { mutableStateOf(listOf<Int>()) }
 
-    MaterialTheme(colorScheme = darkColorScheme()) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
-            when (demo) {
-                Demo.Photos -> PhotosDemo(backdrop)
-                Demo.Showcase -> ShowcaseDemo(backdrop)
-                Demo.Solid -> SolidDemo(backdrop, isSolidLight) { isSolidLight = !isSolidLight }
-                Demo.Playground -> PlaygroundDemo(backdrop)
-                Demo.Patterns -> PatternsDemo(backdrop)
+    BackHandler(enabled = screen != Screen.Movie) { screen = Screen.entries[screen.ordinal - 1] }
+
+    val colors = if (isSystemInDarkTheme()) DarkColors else LightColors
+    MaterialTheme(colorScheme = colors) {
+        Surface(color = colors.background, contentColor = colors.onBackground) {
+            AnimatedContent(
+                targetState = screen,
+                transitionSpec = {
+                    val forward = targetState > initialState
+                    val enter = slideInHorizontally(tween(350)) { if (forward) it / 3 else -it / 3 } + fadeIn(tween(350))
+                    val exit = slideOutHorizontally(tween(350)) { if (forward) -it / 3 else it / 3 } + fadeOut(tween(250))
+                    enter togetherWith exit
+                },
+                label = "screen",
+            ) { shown ->
+                when (shown) {
+                    Screen.Movie -> MovieScreen(onSchedule = { screen = Screen.Seats })
+                    Screen.Seats -> SeatsScreen(
+                        day = day,
+                        onDay = { day = it },
+                        time = time,
+                        onTime = { time = it },
+                        seats = seats,
+                        onSeat = { id -> seats = if (id in seats) seats - id else seats + id },
+                        onBack = { screen = Screen.Movie },
+                        onBuy = { screen = Screen.Ticket },
+                    )
+                    Screen.Ticket -> TicketScreen(
+                        date = ticketDate(day),
+                        time = ShowTimes[time],
+                        seats = describeSeats(seats),
+                        onBack = { screen = Screen.Seats },
+                    )
+                }
             }
-            GlassTabBar(
-                tabs = Tabs,
-                selected = demo.ordinal,
-                onSelect = { demo = Demo.entries[it] },
-                backdrop = backdrop,
-                glass = barGlass,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 14.dp)
-                    .fillMaxWidth()
-                    .height(62.dp),
-            )
         }
     }
 }

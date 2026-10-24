@@ -3,7 +3,7 @@ package io.github.itshedimisawi.vitro
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.itshedimisawi.vitro.internal.GlassContainerElement
+import io.github.itshedimisawi.vitro.internal.node.GlassContainerElement
 
 /**
  * Lets the glass inside this element flow together. Pieces that use [glassEffect] anywhere below

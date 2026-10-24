@@ -5,6 +5,10 @@ compose = "1.12.1"
 composeBom = "2026.09.00"
 activityCompose = "1.13.0"
 materialIcons = "1.7.8"
+junit = "4.13.2"
+mavenPublish = "0.37.0"
+binaryCompatibility = "0.18.2"
+asm = "9.6"
 
 [libraries]
 compose-ui = { module = "androidx.compose.ui:ui", version.ref = "compose" }
@@ -13,8 +17,14 @@ compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeB
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-material-icons = { module = "androidx.compose.material:material-icons-extended", version.ref = "materialIcons" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+junit = { module = "junit:junit", version.ref = "junit" }
+abi-asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
+abi-asm-tree = { module = "org.ow2.asm:asm-tree", version.ref = "asm" }
+abi-kotlin-metadata = { module = "org.jetbrains.kotlin:kotlin-metadata-jvm", version.ref = "kotlin" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "mavenPublish" }
+binary-compatibility = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "binaryCompatibility" }

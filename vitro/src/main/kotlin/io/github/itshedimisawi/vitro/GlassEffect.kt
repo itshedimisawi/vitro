@@ -3,7 +3,7 @@ package io.github.itshedimisawi.vitro
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.ui.Modifier
-import io.github.itshedimisawi.vitro.internal.GlassEffectElement
+import io.github.itshedimisawi.vitro.internal.node.GlassEffectElement
 
 /**
  * Draws a glass material behind this element's content, refracting whatever [backdrop] captures.
@@ -14,7 +14,8 @@ import io.github.itshedimisawi.vitro.internal.GlassEffectElement
  *
  * @param backdrop Content seen through the glass, attached elsewhere with [glassBackdrop].
  * @param glass Material configuration, such as [Glass.Regular] or [Glass.Clear].
- * @param shape Outline of the glass. Defaults to a capsule.
+ * @param shape Outline of the glass, a rectangle with rounded or straight corners. Defaults to a
+ * capsule.
  * @param interaction Receives the touch on this glass when it is [interactive][Glass.interactive],
  * so other elements can follow it. Leave it out when nothing else needs to know.
  * @param onAppearanceChanged Called with [GlassAppearance.Light] or [GlassAppearance.Dark] when

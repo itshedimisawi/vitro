@@ -1,0 +1,114 @@
+public final class io/github/itshedimisawi/vitro/Glass {
+	public static final field $stable I
+	public static final field Companion Lio/github/itshedimisawi/vitro/Glass$Companion;
+	public final fun copy-etpJt7M (FFFFFFFIJFFFFFFZ)Lio/github/itshedimisawi/vitro/Glass;
+	public static synthetic fun copy-etpJt7M$default (Lio/github/itshedimisawi/vitro/Glass;FFFFFFFIJFFFFFFZILjava/lang/Object;)Lio/github/itshedimisawi/vitro/Glass;
+	public final fun dimmed (F)Lio/github/itshedimisawi/vitro/Glass;
+	public static synthetic fun dimmed$default (Lio/github/itshedimisawi/vitro/Glass;FILjava/lang/Object;)Lio/github/itshedimisawi/vitro/Glass;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAppearance-DTifA0o ()I
+	public final fun getBlurRadius-D9Ej5fM ()F
+	public final fun getBrightness ()F
+	public final fun getDimming ()F
+	public final fun getDispersion ()F
+	public final fun getHighlightIntensity ()F
+	public final fun getLightAngle ()F
+	public final fun getMagnification ()F
+	public final fun getRefractionAmount-D9Ej5fM ()F
+	public final fun getRefractionHeight-D9Ej5fM ()F
+	public final fun getSaturation ()F
+	public final fun getShadowOffset-D9Ej5fM ()F
+	public final fun getShadowOpacity ()F
+	public final fun getShadowRadius-D9Ej5fM ()F
+	public final fun getTint-0d7_KjU ()J
+	public fun hashCode ()I
+	public final fun interactive (Z)Lio/github/itshedimisawi/vitro/Glass;
+	public static synthetic fun interactive$default (Lio/github/itshedimisawi/vitro/Glass;ZILjava/lang/Object;)Lio/github/itshedimisawi/vitro/Glass;
+	public final fun isInteractive ()Z
+	public final fun tint-8_81llA (J)Lio/github/itshedimisawi/vitro/Glass;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/itshedimisawi/vitro/Glass$Companion {
+	public final fun getClear ()Lio/github/itshedimisawi/vitro/Glass;
+	public final fun getIdentity ()Lio/github/itshedimisawi/vitro/Glass;
+	public final fun getRegular ()Lio/github/itshedimisawi/vitro/Glass;
+}
+
+public final class io/github/itshedimisawi/vitro/GlassAppearance {
+	public static final field Companion Lio/github/itshedimisawi/vitro/GlassAppearance$Companion;
+	public static final synthetic fun box-impl (I)Lio/github/itshedimisawi/vitro/GlassAppearance;
+	public fun equals (Ljava/lang/Object;)Z
+	public static fun equals-impl (ILjava/lang/Object;)Z
+	public static final fun equals-impl0 (II)Z
+	public fun hashCode ()I
+	public static fun hashCode-impl (I)I
+	public fun toString ()Ljava/lang/String;
+	public static fun toString-impl (I)Ljava/lang/String;
+	public final synthetic fun unbox-impl ()I
+}
+
+public final class io/github/itshedimisawi/vitro/GlassAppearance$Companion {
+	public final fun getAutomatic-DTifA0o ()I
+	public final fun getDark-DTifA0o ()I
+	public final fun getLight-DTifA0o ()I
+}
+
+public final class io/github/itshedimisawi/vitro/GlassBackdrop {
+	public static final field $stable I
+}
+
+public final class io/github/itshedimisawi/vitro/GlassBackdropKt {
+	public static final fun glassBackdrop (Landroidx/compose/ui/Modifier;Lio/github/itshedimisawi/vitro/GlassBackdrop;)Landroidx/compose/ui/Modifier;
+	public static final fun rememberGlassBackdrop (Landroidx/compose/runtime/Composer;I)Lio/github/itshedimisawi/vitro/GlassBackdrop;
+}
+
+public final class io/github/itshedimisawi/vitro/GlassEffectContainerKt {
+	public static final fun glassEffectContainer-3ABfNKs (Landroidx/compose/ui/Modifier;F)Landroidx/compose/ui/Modifier;
+	public static synthetic fun glassEffectContainer-3ABfNKs$default (Landroidx/compose/ui/Modifier;FILjava/lang/Object;)Landroidx/compose/ui/Modifier;
+}
+
+public final class io/github/itshedimisawi/vitro/GlassEffectKt {
+	public static final fun glassEffect (Landroidx/compose/ui/Modifier;Lio/github/itshedimisawi/vitro/GlassBackdrop;Lio/github/itshedimisawi/vitro/Glass;Landroidx/compose/foundation/shape/CornerBasedShape;Lio/github/itshedimisawi/vitro/GlassInteractionState;Lkotlin/jvm/functions/Function1;)Landroidx/compose/ui/Modifier;
+	public static synthetic fun glassEffect$default (Landroidx/compose/ui/Modifier;Lio/github/itshedimisawi/vitro/GlassBackdrop;Lio/github/itshedimisawi/vitro/Glass;Landroidx/compose/foundation/shape/CornerBasedShape;Lio/github/itshedimisawi/vitro/GlassInteractionState;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Landroidx/compose/ui/Modifier;
+}
+
+public final class io/github/itshedimisawi/vitro/GlassInteractionState {
+	public static final field $stable I
+	public fun <init> ()V
+	public final fun getDrag-F1C5BW0 ()J
+	public final fun getOffset-F1C5BW0 ()J
+	public final fun getPosition-F1C5BW0 ()J
+	public final fun getPressure ()F
+	public final fun getScale-_hLwfpc ()J
+	public final fun isHeld ()Z
+}
+
+public final class io/github/itshedimisawi/vitro/GlassInteractionStateKt {
+	public static final fun rememberGlassInteractionState (Landroidx/compose/runtime/Composer;I)Lio/github/itshedimisawi/vitro/GlassInteractionState;
+}
+
+public final class io/github/itshedimisawi/vitro/ScrollEdgeEffectKt {
+	public static final fun scrollEdgeEffect-95CuFrI (Landroidx/compose/ui/Modifier;FFIJZZ)Landroidx/compose/ui/Modifier;
+	public static synthetic fun scrollEdgeEffect-95CuFrI$default (Landroidx/compose/ui/Modifier;FFIJZZILjava/lang/Object;)Landroidx/compose/ui/Modifier;
+}
+
+public final class io/github/itshedimisawi/vitro/ScrollEdgeEffectStyle {
+	public static final field Companion Lio/github/itshedimisawi/vitro/ScrollEdgeEffectStyle$Companion;
+	public static final synthetic fun box-impl (I)Lio/github/itshedimisawi/vitro/ScrollEdgeEffectStyle;
+	public fun equals (Ljava/lang/Object;)Z
+	public static fun equals-impl (ILjava/lang/Object;)Z
+	public static final fun equals-impl0 (II)Z
+	public fun hashCode ()I
+	public static fun hashCode-impl (I)I
+	public fun toString ()Ljava/lang/String;
+	public static fun toString-impl (I)Ljava/lang/String;
+	public final synthetic fun unbox-impl ()I
+}
+
+public final class io/github/itshedimisawi/vitro/ScrollEdgeEffectStyle$Companion {
+	public final fun getAutomatic-Mex9pow ()I
+	public final fun getShaded-Mex9pow ()I
+	public final fun getSoft-Mex9pow ()I
+}
+

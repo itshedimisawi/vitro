@@ -130,21 +130,19 @@ public class GlassInteractionState {
             settling.snapTo(Offset.Zero)
         }
     }
-
-    private companion object {
-        // Pressing snaps up quickly; letting go rebounds past rest once.
-        val PressSpring = spring<Float>(dampingRatio = 0.7f, stiffness = 850f)
-        val ReleaseSpring = spring<Float>(dampingRatio = 0.4f, stiffness = 300f)
-        val ReturnSpring = spring<Offset>(dampingRatio = 0.4f, stiffness = 300f)
-
-        // Sizes in dp.
-        const val PressGrowth = 17f
-        const val ReferenceSize = 44f
-        const val PullShift = 0.036f
-        const val PullStretch = 0.00033f
-        const val MaxPull = 0.3f
-    }
 }
+
+// Pressing snaps up quickly; letting go rebounds past rest once.
+private val PressSpring = spring<Float>(dampingRatio = 0.7f, stiffness = 850f)
+private val ReleaseSpring = spring<Float>(dampingRatio = 0.4f, stiffness = 300f)
+private val ReturnSpring = spring<Offset>(dampingRatio = 0.4f, stiffness = 300f)
+
+// Sizes in dp.
+private const val PressGrowth = 17f
+private const val ReferenceSize = 44f
+private const val PullShift = 0.036f
+private const val PullStretch = 0.00033f
+private const val MaxPull = 0.3f
 
 /**
  * Creates and remembers a [GlassInteractionState] for the current composition.
