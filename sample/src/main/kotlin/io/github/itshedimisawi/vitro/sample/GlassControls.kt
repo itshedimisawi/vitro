@@ -1,6 +1,8 @@
 package io.github.itshedimisawi.vitro.sample
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
@@ -16,6 +18,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,7 +29,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.itshedimisawi.vitro.Glass
-import io.github.itshedimisawi.vitro.GlassAppearance
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.GlassEffectState
 import io.github.itshedimisawi.vitro.glassEffect
@@ -38,14 +40,11 @@ val ActionHeight = 50.dp
 /** Space between the screen edges and the content and controls next to them. */
 val Margin = 20.dp
 
-/** A press that leaves the feedback to the glass under it. */
-fun Modifier.tappable(onClick: () -> Unit): Modifier =
-    clickable(interactionSource = null, indication = null, onClick = onClick)
+/** A press that leaves the feedback to the glass under it, which [interactionSource] tells about it. */
+fun Modifier.tappable(interactionSource: MutableInteractionSource? = null, onClick: () -> Unit): Modifier =
+    clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
 
-/**
- * A piece of glass that colours its content to suit the material: white on dark glass, ink on
- * light glass. A given [contentColor] is used instead.
- */
+/** A piece of glass that colours its content to suit the material, unless [contentColor] is given. */
 @Composable
 fun GlassSurface(
     backdrop: GlassBackdrop,
@@ -54,11 +53,11 @@ fun GlassSurface(
     shape: CornerBasedShape = CircleShape,
     contentColor: Color = Color.Unspecified,
     state: GlassEffectState = rememberGlassEffectState(),
+    interactionSource: InteractionSource? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val ink = if (state.appearance == GlassAppearance.Dark) Color.White else Ink
-    Box(modifier.glassEffect(backdrop, glass, shape, state)) {
-        CompositionLocalProvider(LocalContentColor provides contentColor.takeOrElse { ink }) {
+    Box(modifier.glassEffect(backdrop, glass, shape, state, interactionSource)) {
+        CompositionLocalProvider(LocalContentColor provides contentColor.takeOrElse { state.contentColor }) {
             content()
         }
     }
@@ -77,8 +76,9 @@ fun GlassIconButton(
     size: Dp = ControlSize,
     contentColor: Color = Color.Unspecified,
 ) {
-    GlassSurface(backdrop, glass.interactive(), modifier.size(size), shape, contentColor) {
-        Box(Modifier.fillMaxSize().tappable(onClick), contentAlignment = Alignment.Center) {
+    val source = remember { MutableInteractionSource() }
+    GlassSurface(backdrop, glass.interactive(), modifier.size(size), shape, contentColor, interactionSource = source) {
+        Box(Modifier.fillMaxSize().tappable(source, onClick), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = label, modifier = Modifier.size(size * 0.5f))
         }
     }
@@ -99,7 +99,7 @@ fun GlassButtonGroup(
 
 @Composable
 fun GlassGroupItem(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(40.dp, ControlSize).tappable(onClick)) {
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(40.dp, ControlSize).tappable(onClick = onClick)) {
         Icon(icon, contentDescription = label, modifier = Modifier.size(ControlSize * 0.5f))
     }
 }
@@ -116,8 +116,9 @@ fun GlassTextButton(
     enabled: Boolean = true,
     contentColor: Color = Color.Unspecified,
 ) {
-    GlassSurface(backdrop, glass.interactive(enabled), modifier, shape, contentColor) {
-        val tap = if (enabled) Modifier.tappable(onClick) else Modifier
+    val source = remember { MutableInteractionSource() }
+    GlassSurface(backdrop, glass.interactive(enabled), modifier, shape, contentColor, interactionSource = source) {
+        val tap = if (enabled) Modifier.tappable(source, onClick) else Modifier
         Box(Modifier.fillMaxSize().then(tap), contentAlignment = Alignment.Center) {
             Text(
                 text = text,

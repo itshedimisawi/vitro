@@ -1,6 +1,8 @@
 package io.github.itshedimisawi.vitro.internal.node
 
 import android.os.Build
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -53,6 +55,7 @@ import io.github.itshedimisawi.vitro.internal.render.GlassRenderer
 import io.github.itshedimisawi.vitro.internal.render.GlassScene
 import io.github.itshedimisawi.vitro.internal.render.GlassShape
 import io.github.itshedimisawi.vitro.internal.render.createGlassRenderer
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 internal class GlassEffectElement(
@@ -60,12 +63,13 @@ internal class GlassEffectElement(
     private val glass: Glass,
     private val shape: CornerBasedShape,
     private val state: GlassEffectState?,
+    private val interactionSource: InteractionSource?,
 ) : ModifierNodeElement<GlassNode>() {
 
-    override fun create(): GlassNode = GlassNode(backdrop, glass, shape, state)
+    override fun create(): GlassNode = GlassNode(backdrop, glass, shape, state, interactionSource)
 
     override fun update(node: GlassNode) {
-        node.update(backdrop, glass, shape, state)
+        node.update(backdrop, glass, shape, state, interactionSource)
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -74,6 +78,7 @@ internal class GlassEffectElement(
         properties["glass"] = glass
         properties["shape"] = shape
         properties["state"] = state
+        properties["interactionSource"] = interactionSource
     }
 
     override fun equals(other: Any?): Boolean =
@@ -81,13 +86,15 @@ internal class GlassEffectElement(
             other.backdrop === backdrop &&
             other.glass == glass &&
             other.shape == shape &&
-            other.state === state
+            other.state === state &&
+            other.interactionSource === interactionSource
 
     override fun hashCode(): Int {
         var result = backdrop.hashCode()
         result = 31 * result + glass.hashCode()
         result = 31 * result + shape.hashCode()
         result = 31 * result + state.hashCode()
+        result = 31 * result + interactionSource.hashCode()
         return result
     }
 }
@@ -97,6 +104,7 @@ internal class GlassNode(
     glass: Glass,
     private var corners: CornerBasedShape,
     state: GlassEffectState?,
+    private var interactionSource: InteractionSource?,
 ) : Modifier.Node(),
     DrawModifierNode,
     GlobalPositionAwareModifierNode,
@@ -124,8 +132,10 @@ internal class GlassNode(
     private var isHidden = false
     private val motion = MotionStretch()
     private val ownState = GlassEffectState(GlassAppearance.Light)
-    private var touch = state ?: ownState
-    private val appearance = AppearanceFollower { touch.appearance = it }
+    private var effectState = state ?: ownState
+    private val appearance = AppearanceFollower { effectState.appearance = it }
+    private var interactions: Job? = null
+    private var isPressedByInteraction = false
     private var measured = Size.Zero
     private var isNight by mutableStateOf(false)
 
@@ -147,6 +157,7 @@ internal class GlassNode(
         glass: Glass,
         shape: CornerBasedShape,
         state: GlassEffectState?,
+        interactionSource: InteractionSource?,
     ) {
         this.glass = glass
         material = glass.material()
@@ -164,18 +175,23 @@ internal class GlassNode(
         appearance.watch(if (wantsTone) backdrop else null)
         corners = shape
         val wanted = state ?: ownState
-        if (wanted !== touch) {
-            wanted.appearance = touch.appearance
-            touch = wanted
+        if (wanted !== effectState) {
+            wanted.appearance = effectState.appearance
+            effectState = wanted
         }
-        touch.resize(measured, requireDensity().density)
+        effectState.tint = glass.tint
+        effectState.resize(measured, requireDensity().density)
+        if (interactionSource !== this.interactionSource) {
+            this.interactionSource = interactionSource
+            followInteractions()
+        }
         if (!glass.isInteractive) settle()
         invalidateDraw()
     }
 
     override fun onRemeasured(size: IntSize) {
         measured = size.toSize()
-        touch.resize(measured, requireDensity().density)
+        effectState.resize(measured, requireDensity().density)
     }
 
     override fun onAttach() {
@@ -189,6 +205,8 @@ internal class GlassNode(
             followTone(it)
         }
         appearance.watch(if (wantsTone) backdrop else null)
+        effectState.tint = glass.tint
+        followInteractions()
         renderer = createGlassRenderer(context, coroutineScope)
         // Glass in a container is drawn by it, except a piece inside another piece of the same one.
         val around = findNearestAncestor(GlassContainerNode) as? GlassContainerNode
@@ -215,6 +233,7 @@ internal class GlassNode(
         pane = null
         beneath = null
         appearance.stop()
+        isPressedByInteraction = false
         placement = Offset.Unspecified
         placed = Offset.Unspecified
         isHidden = false
@@ -243,19 +262,19 @@ internal class GlassNode(
         scene.glass = glass
         val shape = scene.shape
         shape.glass = glass
-        val held = touch.scale
+        val held = effectState.scale
         val position = source.localPositionOf(requireLayoutCoordinates(), Offset.Zero)
-        shape.origin = position + touch.offset
+        shape.origin = position + effectState.offset
         shape.size = measured
         scene.origin = shape.origin
         scene.extent = measured
         scene.revision = backdrop.generation
         isNight = isNightMode()
         shape.darkness = appearance.value
-        val finger = touch.position
+        val finger = effectState.position
         shape.touch = Offset(finger.x.coerceIn(0f, measured.width), finger.y.coerceIn(0f, measured.height))
-        shape.pressure = touch.pressure.coerceAtLeast(0f)
-        shape.glow = shape.pressure * (PressGlow + PressGlowPerGrowth * touch.growth)
+        shape.pressure = effectState.pressure.coerceAtLeast(0f)
+        shape.glow = shape.pressure * (PressGlow + PressGlowPerGrowth * effectState.growth)
         corners.resolveRadii(measured, requireDensity(), requireLayoutDirection(), shape.radii)
 
         val pull = motion.value
@@ -331,14 +350,17 @@ internal class GlassNode(
         if (!glass.isInteractive || pass != PointerEventPass.Main) return
         val change = pointerEvent.changes.firstOrNull() ?: return
         when (pointerEvent.type) {
-            PointerEventType.Press -> touch.press(coroutineScope, change.position)
-            PointerEventType.Move -> touch.move(change.position)
-            PointerEventType.Release -> touch.release(coroutineScope)
+            PointerEventType.Press -> {
+                isPressedByInteraction = false
+                effectState.press(coroutineScope, change.position)
+            }
+            PointerEventType.Move -> effectState.move(change.position)
+            PointerEventType.Release -> effectState.release(coroutineScope)
         }
     }
 
     override fun onCancelPointerInput() {
-        touch.release(coroutineScope)
+        if (!isPressedByInteraction) effectState.release(coroutineScope)
     }
 
     override fun sharePointerInputWithSiblings(): Boolean = !glass.isInteractive
@@ -384,13 +406,35 @@ internal class GlassNode(
         appearance.follow(coroutineScope, backdrop, pane, beneath, { glass }, { isNight })
     }
 
+    // Presses that don't come from a finger on the glass, such as a keyboard click. A finger press
+    // owns the glass until it lifts, so the matching interactions are left to it.
+    private fun followInteractions() {
+        interactions?.cancel()
+        val source = interactionSource ?: return
+        interactions = coroutineScope.launch {
+            source.interactions.collect { interaction ->
+                when (interaction) {
+                    is PressInteraction.Press -> if (glass.isInteractive && !effectState.isHeld) {
+                        isPressedByInteraction = true
+                        effectState.press(coroutineScope, interaction.pressPosition)
+                    }
+                    is PressInteraction.Release, is PressInteraction.Cancel -> if (isPressedByInteraction) {
+                        isPressedByInteraction = false
+                        effectState.release(coroutineScope)
+                    }
+                }
+            }
+        }
+    }
+
     private fun drawAgain() {
         coroutineScope.launch { redraws++ }
     }
 
     private fun settle() {
         if (!isAttached) return
-        touch.settle(coroutineScope)
+        isPressedByInteraction = false
+        effectState.settle(coroutineScope)
         motion.reset(coroutineScope)
     }
 

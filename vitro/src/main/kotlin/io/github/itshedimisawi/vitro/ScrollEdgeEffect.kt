@@ -45,9 +45,9 @@ public value class ScrollEdgeEffectStyle private constructor(private val value: 
  * ) { … }
  * ```
  *
- * Put it right after [glassBackdrop]. Glass bars over the content are found on their own, and
- * the effect covers them; [top] and [bottom] add room for things that are not glass, such as the
- * system bars.
+ * Place it after [glassBackdrop] on the same element. Glass bars over the content are found on
+ * their own, and the effect covers them; [top] and [bottom] add room for things that are not
+ * glass, such as the system bars.
  *
  * @param top Height at the top covered by something that is not glass.
  * @param bottom Height at the bottom covered by something that is not glass.

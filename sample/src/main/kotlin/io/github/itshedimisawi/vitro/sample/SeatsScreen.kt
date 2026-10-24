@@ -2,6 +2,7 @@ package io.github.itshedimisawi.vitro.sample
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -141,17 +143,18 @@ private fun ChipRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit
     ) {
         labels.forEachIndexed { index, label ->
             val isSelected = index == selected
+            val source = remember { MutableInteractionSource() }
             GlassSurface(
                 backdrop = backdrop,
                 glass = if (isSelected) selectedGlass else Glass.Regular.interactive(),
-                contentColor = if (isSelected) colors.background else Color.Unspecified,
                 modifier = Modifier.height(ControlSize),
+                interactionSource = source,
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .height(ControlSize)
-                        .tappable { onSelect(index) }
+                        .tappable(source) { onSelect(index) }
                         .padding(horizontal = 16.dp),
                 ) {
                     Text(label, fontSize = 15.sp, fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal)
@@ -213,7 +216,7 @@ private fun SeatMap(seats: List<Int>, onSeat: (Int) -> Unit) {
 
 @Composable
 private fun Seat(row: Int, number: Int, isTaken: Boolean, isSelected: Boolean, pitch: Dp, onClick: () -> Unit) {
-    val tap = if (isTaken) Modifier else Modifier.tappable(onClick)
+    val tap = if (isTaken) Modifier else Modifier.tappable(onClick = onClick)
     val description = Modifier.clearAndSetSemantics {
         contentDescription = "Row $row, seat $number"
         selected = isSelected

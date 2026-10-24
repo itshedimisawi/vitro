@@ -11,12 +11,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import io.github.itshedimisawi.vitro.LocalGlassDarkTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,8 +27,6 @@ class MainActivity : ComponentActivity() {
         setContent { ShowcaseApp() }
     }
 }
-
-val Ink = Color(0xFF111111)
 
 // Page, cards, fills and secondary text in the iOS system colours. Primary marks a selection and
 // secondary is its lighter edge, both from the showcase palette; tertiary is the rating star.
@@ -64,28 +64,32 @@ fun ShowcaseApp() {
 
     BackHandler(enabled = screen != Screen.Movie) { screen = Screen.entries[screen.ordinal - 1] }
 
-    val colors = if (isSystemInDarkTheme()) DarkColors else LightColors
-    MaterialTheme(colorScheme = colors) {
-        Surface(color = colors.background, contentColor = colors.onBackground) {
-            ScreenStack(screen) { shown ->
-                when (shown) {
-                    Screen.Movie -> MovieScreen(onSchedule = { screen = Screen.Seats })
-                    Screen.Seats -> SeatsScreen(
-                        day = day,
-                        onDay = { day = it },
-                        time = time,
-                        onTime = { time = it },
-                        seats = seats,
-                        onSeat = { id -> seats = if (id in seats) seats - id else seats + id },
-                        onBack = { screen = Screen.Movie },
-                        onBuy = { screen = Screen.Ticket },
-                    )
-                    Screen.Ticket -> TicketScreen(
-                        date = ticketDate(day),
-                        time = ShowTimes[time],
-                        seats = describeSeats(seats),
-                        onBack = { screen = Screen.Seats },
-                    )
+    val isDark = isSystemInDarkTheme()
+    val colors = if (isDark) DarkColors else LightColors
+    // Glass follows the same theme as the rest of the app.
+    CompositionLocalProvider(LocalGlassDarkTheme provides isDark) {
+        MaterialTheme(colorScheme = colors) {
+            Surface(color = colors.background, contentColor = colors.onBackground) {
+                ScreenStack(screen) { shown ->
+                    when (shown) {
+                        Screen.Movie -> MovieScreen(onSchedule = { screen = Screen.Seats })
+                        Screen.Seats -> SeatsScreen(
+                            day = day,
+                            onDay = { day = it },
+                            time = time,
+                            onTime = { time = it },
+                            seats = seats,
+                            onSeat = { id -> seats = if (id in seats) seats - id else seats + id },
+                            onBack = { screen = Screen.Movie },
+                            onBuy = { screen = Screen.Ticket },
+                        )
+                        Screen.Ticket -> TicketScreen(
+                            date = ticketDate(day),
+                            time = ShowTimes[time],
+                            seats = describeSeats(seats),
+                            onBack = { screen = Screen.Seats },
+                        )
+                    }
                 }
             }
         }

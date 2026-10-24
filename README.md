@@ -1,8 +1,20 @@
 # Vitro
 
-**Liquid Glass for Jetpack Compose.**
+**Apple's Liquid Glass for Android.** A Jetpack Compose library rendered with custom AGSL shaders, calibrated against a real iPhone and optimized to render smoothly on any device.
 
-Vitro brings Apple's Liquid Glass material to Android as plain Compose modifiers, so any composable can become glass. The API follows SwiftUI's `glassEffect`, and the defaults are tuned to match iOS 26.
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.itshedimisawi/vitro)](https://central.sonatype.com/artifact/io.github.itshedimisawi/vitro)
+[![Min API](https://img.shields.io/badge/API-23%2B-brightgreen)](#android-versions)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
+
+![The sample app: a film page, its details, seat selection and a ticket, with Liquid Glass toolbars, buttons and chips](docs/vitro-showcase.webp)
+
+Vitro brings Apple's Liquid Glass material to Android as plain Compose modifiers, so any composable can become glass. The API mirrors SwiftUI's `glassEffect`.
+
+- **Faithful to iOS.** Every default was tuned side by side with captures from an iPhone running iOS 26: the rim's refraction and highlights, the blur, the light and dark materials, the shadow and the touch response.
+- **Well optimized.** Rendering is kept lean: each piece of glass takes only a few GPU passes, grouped glass is drawn together at the cost of a single piece, glass out of sight isn't rendered, and the content behind the glass is sampled off the render thread. Scrolling and touch stay smooth, even on entry-level phones.
+- **Works from Android 6.** Android 13 and later get the full shader effect; older versions get a close approximation.
+
+## Features
 
 - Refraction at the rim, colour fringing, highlights and a soft shadow
 - `Regular` and `Clear` glass, tinting, dimming and glass that reacts to touch
@@ -17,6 +29,8 @@ dependencies {
     implementation("io.github.itshedimisawi:vitro:0.1.0")
 }
 ```
+
+Vitro is available on Maven Central and needs Jetpack Compose 1.12 or later.
 
 ## Quick start
 
@@ -57,19 +71,36 @@ Every property (blur, refraction, magnification, saturation, light angle, shadow
 
 ### Content colour and touch
 
-`GlassEffectState` tells you which material the glass shows and how it's being touched. Use it to colour content on glass that picks its appearance itself:
+`GlassEffectState` tells you which material the glass shows and how it's being touched. Its `contentColor` is a legible colour for text and icons, which follows the material and any strong tint:
 
 ```kotlin
 val state = rememberGlassEffectState()
 Icon(
     Icons.Rounded.Share,
     contentDescription = "Share",
-    tint = if (state.appearance == GlassAppearance.Dark) Color.White else Color.Black,
+    tint = state.contentColor,
     modifier = Modifier.size(44.dp).glassEffect(backdrop, Glass.Regular.interactive(), state = state).padding(11.dp),
 )
 ```
 
-To force a material, use `Glass.Regular.copy(appearance = GlassAppearance.Dark)`.
+To force a material, use `Glass.Regular.copy(appearance = GlassAppearance.Dark)`. If your app has its own dark theme setting, provide it once so glass follows it instead of the system:
+
+```kotlin
+CompositionLocalProvider(LocalGlassDarkTheme provides isAppInDarkTheme) { App() }
+```
+
+### Clickable glass
+
+Share one `MutableInteractionSource` between the glass and its `clickable`, so keyboard and D-pad clicks press the glass too. Pass `indication = null`, since the glass gives its own press feedback.
+
+```kotlin
+val source = remember { MutableInteractionSource() }
+Box(
+    Modifier
+        .glassEffect(backdrop, Glass.Regular.interactive(), interactionSource = source)
+        .clickable(source, indication = null, onClick = onClick),
+)
+```
 
 ### Grouping glass
 
@@ -87,10 +118,12 @@ Row(Modifier.glassEffectContainer(), horizontalArrangement = Arrangement.spacedB
 Softens content where it scrolls under bars. Glass bars are found automatically; pass the system bar heights for the rest.
 
 ```kotlin
+val systemBars = WindowInsets.systemBars.asPaddingValues()
 Column(
     Modifier
         .glassBackdrop(backdrop)
-        .scrollEdgeEffect(top = statusBarHeight, bottom = navigationBarHeight)
+        .background(MaterialTheme.colorScheme.background)
+        .scrollEdgeEffect(top = systemBars.calculateTopPadding(), bottom = systemBars.calculateBottomPadding())
         .verticalScroll(rememberScrollState()),
 ) { ... }
 ```
@@ -103,14 +136,15 @@ Column(
 | `Glass.Regular` / `Clear` / `Identity` | `.regular` / `.clear` / `.identity` |
 | `.tint(color)`, `.interactive()`, `.dimmed()` | `.tint(_:)`, `.interactive()` |
 | `Modifier.glassEffectContainer(spacing)` | `GlassEffectContainer(spacing:)` |
-| `Modifier.scrollEdgeEffect(style, isTopHidden, …)` | `.scrollEdgeEffectStyle(_:for:)`, `.scrollEdgeEffectHidden(_:for:)` |
+| `Modifier.scrollEdgeEffect(top, bottom, style, …, isTopHidden, isBottomHidden)` | `.scrollEdgeEffectStyle(_:for:)`, `.scrollEdgeEffectHidden(_:for:)` |
 | `rememberGlassBackdrop()`, `Modifier.glassBackdrop(backdrop)` | (implicit) |
-| `rememberGlassEffectState()` | |
+| `rememberGlassEffectState()`, `LocalGlassDarkTheme` | |
 
 ## Tips
 
 - Apply `glassEffect` after size and padding modifiers.
-- Put a `background` after `glassBackdrop`, so the page colour is part of the backdrop.
+- Order the backdrop modifiers as `glassBackdrop(backdrop).background(page).scrollEdgeEffect(…)`: the background must come after `glassBackdrop` to be part of what glass shows, and `scrollEdgeEffect` goes anywhere after `glassBackdrop`.
+- Glass shapes always have round corners; a `CutCornerShape` is drawn rounded.
 - Use glass for controls and navigation that float above content, not for the content itself.
 
 ## Android versions
@@ -129,13 +163,15 @@ The `sample` module is a three-screen cinema booking flow (film details, seat se
 ./gradlew :sample:installDebug
 ```
 
-## Building
+## Contributing
+
+Issues and pull requests are welcome. Before opening a pull request, run:
 
 ```
 ./gradlew :vitro:check
 ```
 
-This runs the unit tests, lint and a public API check against `vitro/api/vitro.api`. After an intended API change, run `./gradlew :vitro:apiDump`.
+This runs the unit tests, lint and a check of the public API against `vitro/api/vitro.api`. If you change the public API on purpose, update that file with `./gradlew :vitro:apiDump`.
 
 ## License
 

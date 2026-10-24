@@ -10,7 +10,7 @@
 
 ## Legibility
 
-- Content colour that blends with what is behind the glass, as labels and symbols do on iOS, instead of a flat colour chosen from `onAppearanceChanged`
+- Content colour that blends with what is behind the glass, as labels and symbols do on iOS, instead of the flat `GlassEffectState.contentColor`
 - A progressive blur in the scroll edge effect, next to the fade it applies now
 
 ## Further ideas
@@ -19,4 +19,3 @@
 - Stacking order that follows `zIndex` rather than the order glass is added
 - Continuous-curvature corners
 - Verify the Android 12 rendering path on a device or emulator image
-- Publish to Maven Central

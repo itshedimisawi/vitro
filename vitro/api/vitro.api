@@ -54,6 +54,10 @@ public final class io/github/itshedimisawi/vitro/GlassAppearance$Companion {
 	public final fun getLight-DTifA0o ()I
 }
 
+public final class io/github/itshedimisawi/vitro/GlassAppearanceKt {
+	public static final fun getLocalGlassDarkTheme ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+}
+
 public final class io/github/itshedimisawi/vitro/GlassBackdrop {
 	public static final field $stable I
 }
@@ -69,13 +73,14 @@ public final class io/github/itshedimisawi/vitro/GlassEffectContainerKt {
 }
 
 public final class io/github/itshedimisawi/vitro/GlassEffectKt {
-	public static final fun glassEffect (Landroidx/compose/ui/Modifier;Lio/github/itshedimisawi/vitro/GlassBackdrop;Lio/github/itshedimisawi/vitro/Glass;Landroidx/compose/foundation/shape/CornerBasedShape;Lio/github/itshedimisawi/vitro/GlassEffectState;)Landroidx/compose/ui/Modifier;
-	public static synthetic fun glassEffect$default (Landroidx/compose/ui/Modifier;Lio/github/itshedimisawi/vitro/GlassBackdrop;Lio/github/itshedimisawi/vitro/Glass;Landroidx/compose/foundation/shape/CornerBasedShape;Lio/github/itshedimisawi/vitro/GlassEffectState;ILjava/lang/Object;)Landroidx/compose/ui/Modifier;
+	public static final fun glassEffect (Landroidx/compose/ui/Modifier;Lio/github/itshedimisawi/vitro/GlassBackdrop;Lio/github/itshedimisawi/vitro/Glass;Landroidx/compose/foundation/shape/CornerBasedShape;Lio/github/itshedimisawi/vitro/GlassEffectState;Landroidx/compose/foundation/interaction/InteractionSource;)Landroidx/compose/ui/Modifier;
+	public static synthetic fun glassEffect$default (Landroidx/compose/ui/Modifier;Lio/github/itshedimisawi/vitro/GlassBackdrop;Lio/github/itshedimisawi/vitro/Glass;Landroidx/compose/foundation/shape/CornerBasedShape;Lio/github/itshedimisawi/vitro/GlassEffectState;Landroidx/compose/foundation/interaction/InteractionSource;ILjava/lang/Object;)Landroidx/compose/ui/Modifier;
 }
 
 public final class io/github/itshedimisawi/vitro/GlassEffectState {
 	public static final field $stable I
 	public final fun getAppearance-DTifA0o ()I
+	public final fun getContentColor-0d7_KjU ()J
 	public final fun getDrag-F1C5BW0 ()J
 	public final fun getOffset-F1C5BW0 ()J
 	public final fun getPosition-F1C5BW0 ()J

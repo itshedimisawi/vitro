@@ -12,14 +12,14 @@ import androidx.compose.ui.unit.dp
  * or [copy]. Use [Glass.Identity] to turn the glass off without changing the modifier chain.
  *
  * @property blurRadius How much the content behind the glass is blurred.
- * @property refractionHeight Width of the rim, from the edge inward, where content is bent.
+ * @property refractionHeight How far the rim reaches in from the edge. Content is bent within it.
  * @property refractionAmount How far the rim bends content. 0 turns bending off.
  * @property dispersion Colour fringing along the rim, from 0 for none to about 0.1 for strong.
  * @property magnification Zoom of the content seen through the glass. 1 is true size, below 1
- * shows a wider area, above 1 enlarges. Never below 0.5.
+ * shows a wider area, above 1 enlarges. Values below 0.5 are treated as 0.5.
  * @property saturation Colour intensity of the content seen through the glass. 1 leaves it as is.
- * @property brightness How much the glass lightens or darkens content to keep what's on it
- * legible, from 0 to 1. Negative values darken.
+ * @property brightness How strongly the glass adjusts content to keep what's on it legible, from
+ * -1 to 1. Positive values veil it toward the material, negative values darken it.
  * @property appearance Whether the glass uses the light or the dark material, or picks one itself.
  * @property tint Colour mixed into the glass; its alpha sets the strength. Unspecified for none.
  * @property dimming Opacity of a dark layer behind the glass, from 0 to 1.

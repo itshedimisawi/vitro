@@ -16,13 +16,15 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.itshedimisawi.vitro.GlassBackdrop
+import io.github.itshedimisawi.vitro.LocalGlassDarkTheme
 import io.github.itshedimisawi.vitro.internal.render.GlassPane
 import io.github.itshedimisawi.vitro.internal.render.GlassRenderer
 import io.github.itshedimisawi.vitro.internal.render.GlassScene
 import io.github.itshedimisawi.vitro.internal.render.paintedBounds
 
-/** Whether the interface is in its dark theme. */
+/** Whether the interface is in its dark theme: as the app provides it, or else as the system has it. */
 internal fun CompositionLocalConsumerModifierNode.isNightMode(): Boolean {
+    currentValueOf(LocalGlassDarkTheme)?.let { return it }
     val mode = currentValueOf(LocalConfiguration).uiMode and Configuration.UI_MODE_NIGHT_MASK
     return mode == Configuration.UI_MODE_NIGHT_YES
 }
