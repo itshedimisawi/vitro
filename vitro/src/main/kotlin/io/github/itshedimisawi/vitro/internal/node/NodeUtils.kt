@@ -2,16 +2,24 @@ package io.github.itshedimisawi.vitro.internal.node
 
 import android.content.res.Configuration
 import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.runtime.State
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.draw
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.currentValueOf
+import androidx.compose.ui.node.findNearestAncestor
 import androidx.compose.ui.node.traverseAncestors
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.internal.render.GlassPane
+import io.github.itshedimisawi.vitro.internal.render.GlassRenderer
+import io.github.itshedimisawi.vitro.internal.render.GlassScene
+import io.github.itshedimisawi.vitro.internal.render.paintedBounds
 
 /** Whether the interface is in its dark theme. */
 internal fun CompositionLocalConsumerModifierNode.isNightMode(): Boolean {
@@ -55,4 +63,36 @@ internal fun DelegatableNode.enclosingGlass(backdrop: GlassBackdrop, known: List
     }
     val enclosing = found ?: emptyList()
     return if (enclosing == known) known else enclosing
+}
+
+/** The backdrop whose content this node is part of, if any. */
+internal fun DelegatableNode.enclosingBackdrop(): GlassBackdrop? =
+    (findNearestAncestor(BackdropNode) as? BackdropNode)?.backdrop
+
+/**
+ * Records the shadow and material of [scene] into the surface of [pane], and publishes the area
+ * the pane paints and takes in. False while the renderer holds spare room to give back.
+ */
+internal fun ContentDrawScope.recordMaterial(
+    renderer: GlassRenderer,
+    scene: GlassScene,
+    pane: GlassPane,
+    beneath: State<List<GlassPane>>?,
+    density: Density,
+): Boolean {
+    scene.view = with(renderer) { view(scene) }
+    pane.bounds = paintedBounds(scene).translate(scene.origin)
+    pane.view = scene.view.translate(scene.origin)
+    scene.beneath = beneath?.value.orEmpty()
+    scene.enclosing = pane.within
+    val shift = scene.origin - pane.origin
+    val direction = layoutDirection
+    val bounds = size
+    // A recording scope is its own density and cannot be read from, so the real one is passed in.
+    pane.surface.record {
+        draw(density, direction, drawContext.canvas, bounds, drawContext.graphicsLayer) {
+            translate(shift.x, shift.y) { with(renderer) { render(scene) } }
+        }
+    }
+    return scene.isSettled
 }

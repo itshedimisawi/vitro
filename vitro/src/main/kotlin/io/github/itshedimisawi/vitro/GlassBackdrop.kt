@@ -2,6 +2,8 @@ package io.github.itshedimisawi.vitro
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -18,31 +20,71 @@ import io.github.itshedimisawi.vitro.internal.render.GlassPane
 import io.github.itshedimisawi.vitro.internal.tone.BackdropTone
 
 /**
- * Handle to the content that glass refracts.
+ * The content that glass shows through it.
  *
- * Create one with [rememberGlassBackdrop], attach it to the content with [glassBackdrop] and pass
- * it to every [glassEffect] that should see that content.
+ * Create one with [rememberGlassBackdrop], mark the content with [glassBackdrop], and pass it to
+ * each [glassEffect] drawn over that content.
  */
 @Stable
 public class GlassBackdrop internal constructor(internal val layer: GraphicsLayer) {
     internal var coordinates: LayoutCoordinates? = null
 
-    // Glass drawn over this backdrop, lowest first, and those of it that are part of the content.
-    internal val panes = mutableStateListOf<GlassPane>()
-    internal val inside = mutableStateListOf<GlassPane>()
+    // Glass over this backdrop, lowest first, and the part of it that sits inside the content.
+    private val _panes = mutableStateListOf<GlassPane>()
+    private val _inside = mutableStateListOf<GlassPane>()
+    internal val panes: List<GlassPane> get() = _panes
+    internal val inside: List<GlassPane> get() = _inside
     internal var generation: Int by mutableIntStateOf(0)
 
-    // Brightness of the content, kept up to date while any glass chooses its material from it.
+    // The brightness of the content, read only while some glass picks its material from it.
     internal var tone: BackdropTone? by mutableStateOf(null)
-    internal var toneWatchers: Int by mutableIntStateOf(0)
+    internal val isToneWatched: Boolean get() = toneWatchers > 0
+    private var toneWatchers by mutableIntStateOf(0)
 
-    // The scroll edge effect on this content, whose veils also soften the glass in it.
+    // The scroll edge effect on this content, which also softens the glass inside it.
     internal var edge: ScrollEdgeNode? = null
+
+    internal fun watchTone() {
+        toneWatchers++
+    }
+
+    internal fun unwatchTone() {
+        toneWatchers--
+    }
+
+    /** Adds [pane] on top of the other glass, or just under [before]. */
+    internal fun addPane(pane: GlassPane, isContent: Boolean, before: GlassPane? = null) {
+        pane.isContent = isContent
+        _panes.insertBefore(pane, before)
+        if (isContent) _inside.insertBefore(pane, before)
+    }
+
+    internal fun removePane(pane: GlassPane) {
+        _panes.remove(pane)
+        _inside.remove(pane)
+    }
+
+    /**
+     * The glass that [pane] sees in its view: pieces below it and pieces it sits inside, never one
+     * inside it. Derived, so readers only update when that set changes.
+     */
+    internal fun glassBeneath(pane: GlassPane): State<List<GlassPane>> = derivedStateOf {
+        val index = _panes.indexOf(pane)
+        val within = pane.within
+        _panes.filterIndexed { position, other ->
+            other !== pane &&
+                (other in within || position < index && pane !in other.within) &&
+                other.bounds.overlaps(pane.view)
+        }
+    }
+
+    private fun MutableList<GlassPane>.insertBefore(pane: GlassPane, before: GlassPane?) {
+        val index = if (before != null) indexOf(before) else -1
+        if (index >= 0) add(index, pane) else add(pane)
+    }
 }
 
-/**
- * Creates and remembers a [GlassBackdrop] for the current composition.
- */
+/** Creates and remembers a [GlassBackdrop]. */
 @Composable
 public fun rememberGlassBackdrop(): GlassBackdrop {
     val layer = rememberGraphicsLayer()
@@ -50,24 +92,22 @@ public fun rememberGlassBackdrop(): GlassBackdrop {
 }
 
 /**
- * Marks this element's content as what glass sharing [backdrop] sees behind it.
+ * Marks this element's content as what the glass using [backdrop] shows through it.
  *
- * The content is drawn as usual. Glass is typically placed outside of it, as siblings layered on
- * top. Glass placed over other glass on the same backdrop sees it: each piece shows through the
- * ones added after it.
+ * ```
+ * Box {
+ *     Image(…, Modifier.fillMaxSize().glassBackdrop(backdrop))
+ *     Button(…, Modifier.glassEffect(backdrop))
+ * }
+ * ```
  *
- * What counts as content is everything drawn by the modifiers after this one and by the
- * element's children, so place a `background` after it: `Modifier.glassBackdrop(backdrop).background(page)`.
- * Glass only refracts what the content draws. Areas it leaves transparent show as clear and
- * are left out when automatic glass chooses its appearance.
+ * The content is everything drawn after this modifier, so put a `background` after it, not
+ * before. Glass usually sits on top of the content as a sibling, but it can also be inside it,
+ * such as a button that scrolls with the page.
  *
- * Glass may also be part of the content, for example a button that scrolls with the page. Such a
- * piece sees the rest of the content without itself and is drawn over all of it, whatever its
- * place in drawing order. It follows its own position and is cut off where a scrolling or
- * clipping parent would cut it off, and [scrollEdgeEffect] softens it along with the rest of the
- * content. It does not follow a `graphicsLayer` that scales, rotates or fades a parent.
+ * Glass inside the content does not follow a parent `graphicsLayer` that scales, rotates or fades.
  *
- * @param backdrop Handle that connects this content to the glass drawn over it.
+ * @param backdrop The backdrop that glass drawn over this content refers to.
  */
 public fun Modifier.glassBackdrop(backdrop: GlassBackdrop): Modifier =
     this then GlassBackdropElement(backdrop)

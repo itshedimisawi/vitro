@@ -22,7 +22,7 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
-import androidx.compose.ui.node.findNearestAncestor
+import androidx.compose.ui.node.UnplacedAwareModifierNode
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.requireLayoutCoordinates
@@ -35,6 +35,7 @@ import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.ScrollEdgeEffectStyle
 import io.github.itshedimisawi.vitro.internal.tone.BackdropTone
 import io.github.itshedimisawi.vitro.internal.tone.ToneReader
+import io.github.itshedimisawi.vitro.internal.tone.followReadings
 import io.github.itshedimisawi.vitro.internal.tone.shadeOver
 import kotlin.math.max
 import kotlinx.coroutines.flow.collectLatest
@@ -75,8 +76,13 @@ internal class ScrollEdgeElement(
             other.isBottomHidden == isBottomHidden
 
     override fun hashCode(): Int {
-        val look = ((top.hashCode() * 31 + bottom.hashCode()) * 31 + style.hashCode()) * 31 + color.hashCode()
-        return (look * 31 + isTopHidden.hashCode()) * 31 + isBottomHidden.hashCode()
+        var result = top.hashCode()
+        result = 31 * result + bottom.hashCode()
+        result = 31 * result + style.hashCode()
+        result = 31 * result + color.hashCode()
+        result = 31 * result + isTopHidden.hashCode()
+        result = 31 * result + isBottomHidden.hashCode()
+        return result
     }
 }
 
@@ -87,7 +93,7 @@ internal class ScrollEdgeNode(
     private var color: Color,
     isTopHidden: Boolean,
     isBottomHidden: Boolean,
-) : Modifier.Node(), DrawModifierNode, CompositionLocalConsumerModifierNode {
+) : Modifier.Node(), DrawModifierNode, UnplacedAwareModifierNode, CompositionLocalConsumerModifierNode {
 
     private var style by mutableStateOf(style)
     private var bars by mutableStateOf(Bars.None)
@@ -101,7 +107,7 @@ internal class ScrollEdgeNode(
 
     private val shade = arrayOf(Animatable(0f), Animatable(0f))
 
-    // Which edges are hidden, and how far each is shown, so an edge fades as it is hidden or shown.
+    // Which edges are hidden, and how far each is shown, so an edge fades in and out.
     private val isHidden = mutableStateListOf(isTopHidden, isBottomHidden)
     private val shown = arrayOf(Animatable(if (isTopHidden) 0f else 1f), Animatable(if (isBottomHidden) 0f else 1f))
 
@@ -124,19 +130,7 @@ internal class ScrollEdgeNode(
 
     override fun onAttach() {
         for (edge in shade.indices) {
-            coroutineScope.launch {
-                var wasSampled = false
-                snapshotFlow { wanted(edge) }.collectLatest { (target, isSampled) ->
-                    val level = shade[edge]
-                    val isEased = isSampled && wasSampled
-                    wasSampled = isSampled
-                    when {
-                        !isEased -> level.snapTo(target)
-                        target > level.value -> level.animateTo(target, ShadeIn)
-                        else -> level.animateTo(target, ShadeOut)
-                    }
-                }
-            }
+            coroutineScope.launch { shade[edge].followReadings(ShadeIn, ShadeOut) { wanted(edge) } }
             coroutineScope.launch {
                 snapshotFlow { if (isHidden[edge]) 0f else 1f }.collectLatest { target ->
                     shown[edge].animateTo(target, Reveal)
@@ -157,10 +151,12 @@ internal class ScrollEdgeNode(
         veils.clear()
     }
 
-    /**
-     * Draws the veils of this frame again, in the coordinates of the backdrop, blended by
-     * [blendMode]. The backdrop lays them over the glass that is part of its content.
-     */
+    // Unplaced content is not drawn, so there is nothing to read until it is placed again.
+    override fun onUnplaced() {
+        reader.pause()
+    }
+
+    /** Draws this frame's veils again in backdrop coordinates, over the glass inside the content. */
     fun DrawScope.drawVeils(blendMode: BlendMode) {
         translate(veilOrigin.x, veilOrigin.y) {
             for ((area, brush) in veils) drawRect(brush, area.topLeft, area.size, blendMode = blendMode)
@@ -209,9 +205,8 @@ internal class ScrollEdgeNode(
         for ((area, brush) in veils) drawRect(brush, area.topLeft, area.size)
     }
 
-    // One veil for both looks: the page colour and the shade are mixed by how far the edge is
-    // toward the shade, so an edge that changes look never passes through a lighter veil. [shown]
-    // scales the whole veil while the edge fades in or out.
+    // One veil mixes the page colour and the shade, so changing style never passes through a
+    // lighter veil. [shown] scales it while the edge fades in or out.
     private fun veil(page: Color, shaded: Float, shadeStrength: Float, shown: Float, startY: Float, endY: Float): Brush {
         val soft = page.alpha * Strength * (1f - shaded)
         val dark = shadeStrength * shaded
@@ -228,7 +223,7 @@ internal class ScrollEdgeNode(
     }
 
     private fun ContentDrawScope.barsInView(reach: Float): Bars {
-        val backdrop = (findNearestAncestor(BackdropNode) as? BackdropNode)?.backdrop ?: return Bars.None
+        val backdrop = enclosingBackdrop() ?: return Bars.None
         if (owner !== backdrop) {
             owner?.let { if (it.edge === this@ScrollEdgeNode) it.edge = null }
             owner = backdrop
@@ -260,8 +255,7 @@ internal class ScrollEdgeNode(
     private fun Dp.pxOrZero(scope: ContentDrawScope): Float = if (isSpecified) with(scope) { toPx() } else 0f
 
     private companion object {
-        // The effect begins this far past the covered height and takes `Ramp` to reach full
-        // strength, which it then keeps to the edge.
+        // The effect starts this far past the covered height and reaches full strength over `Ramp`.
         val Reach = 46.dp
         val Ramp = 120.dp
         const val Strength = 0.855f
@@ -276,8 +270,8 @@ internal class ScrollEdgeNode(
 }
 
 /**
- * The glass among [outlines] that sits at the top and at the bottom of content [extent] tall, of
- * which [top] and [bottom] are already covered by something that is not glass.
+ * The glass among [outlines] that forms bars at the top and bottom of content [extent] tall, where
+ * [top] and [bottom] are already covered by something that is not glass.
  */
 internal fun findBars(outlines: List<Rect>, extent: Float, reach: Float, top: Float, bottom: Float): Bars {
     val atTop = stack(outlines, extent, reach, top, isTop = true)
@@ -285,8 +279,8 @@ internal fun findBars(outlines: List<Rect>, extent: Float, reach: Float, top: Fl
     return if (atTop.isEmpty() && atBottom.isEmpty()) Bars.None else Bars(atTop, atBottom)
 }
 
-// Glass belongs to an edge while the gap between it and the edge, or glass already counted, is
-// narrower than the effect's reach. Glass that runs past the middle is not a bar.
+// Glass joins an edge while its gap to the edge, or to glass already counted, is within reach.
+// Glass that runs past the middle is not a bar.
 private fun stack(outlines: List<Rect>, extent: Float, reach: Float, given: Float, isTop: Boolean): List<Rect> {
     var taken: ArrayList<Rect>? = null
     var covered = given
@@ -312,7 +306,7 @@ internal data class Bars(val top: List<Rect>, val bottom: List<Rect>) {
 
     val isEmpty: Boolean get() = top.isEmpty() && bottom.isEmpty()
 
-    /** Height covered at an edge: what the caller has [given] or what the glass there reaches, whichever is more. */
+    /** Height covered at an edge: the [given] height or the glass there, whichever reaches further. */
     fun covered(isTop: Boolean, given: Float, extent: Float): Float {
         var covered = given
         for (outline in if (isTop) top else bottom) {

@@ -11,12 +11,11 @@ import io.github.itshedimisawi.vitro.internal.render.GlassPane
 import io.github.itshedimisawi.vitro.internal.render.GlassScene
 import io.github.itshedimisawi.vitro.internal.render.GlassShape
 import io.github.itshedimisawi.vitro.internal.render.ShaderRenderer
-import kotlin.math.max
-import kotlin.math.min
+import io.github.itshedimisawi.vitro.internal.render.joinedWith
 
 /**
- * Glass of one material over one backdrop, drawn in a single pass. It is one more pane on the
- * backdrop, placed under the panes of its pieces, which hold their content only.
+ * Glass of one material over one backdrop, drawn in a single pass. Its pane sits under the panes
+ * of its pieces, which then hold only their content.
  */
 @RequiresApi(33)
 internal class GlassGroup(
@@ -41,17 +40,9 @@ internal class GlassGroup(
 
     /** The smallest rectangle around every piece at rest, in the backdrop. */
     fun frame(): Rect {
-        var left = Float.POSITIVE_INFINITY
-        var top = Float.POSITIVE_INFINITY
-        var right = Float.NEGATIVE_INFINITY
-        var bottom = Float.NEGATIVE_INFINITY
-        for (shape in shapes) {
-            left = min(left, shape.origin.x)
-            top = min(top, shape.origin.y)
-            right = max(right, shape.origin.x + shape.size.width)
-            bottom = max(bottom, shape.origin.y + shape.size.height)
-        }
-        return Rect(left, top, right, bottom)
+        var frame: Rect? = null
+        for (shape in shapes) frame = frame.joinedWith(Rect(shape.origin, shape.size))
+        return frame ?: Rect.Zero
     }
 
     fun release(context: GraphicsContext) {

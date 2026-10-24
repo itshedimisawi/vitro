@@ -1,6 +1,7 @@
 package io.github.itshedimisawi.vitro.internal.tone
 
 import androidx.compose.ui.geometry.Rect
+import java.nio.ByteBuffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -64,6 +65,21 @@ class ToneTest {
     fun partlyCoveredCellsCountByTheirCover() {
         val tone = BackdropTone(2, 1, 10f, floatArrayOf(1f, 1f, 1f, 0f, 0f, 0f), floatArrayOf(0.5f, 1f))
         assertEquals(1f / 3f, tone.luminance(Rect(0f, 0f, 20f, 10f), emptyList()), 1e-5f)
+    }
+
+    @Test
+    fun readsPremultipliedPixelsRowByRow() {
+        // Rows of two pixels, padded to 12 bytes: white at half cover then nothing, then black.
+        val pixels = ByteBuffer.wrap(
+            byteArrayOf(
+                128.toByte(), 128.toByte(), 128.toByte(), 128.toByte(), 0, 0, 0, 0, 9, 9, 9, 9,
+                0, 0, 0, 255.toByte(), 0, 0, 0, 255.toByte(), 9, 9, 9, 9,
+            ),
+        )
+        val tone = BackdropTone.read(pixels, width = 2, height = 2, rowStride = 12, cell = 10f)
+        assertEquals(1f, tone.luminance(Rect(0f, 0f, 20f, 10f), emptyList()), 1e-6f)
+        assertEquals(0f, tone.luminance(Rect(0f, 10f, 20f, 20f), emptyList()), 1e-6f)
+        assertEquals(1f / 3f, tone.luminance(Rect(0f, 0f, 10f, 20f), emptyList()), 1e-2f)
     }
 
     @Test

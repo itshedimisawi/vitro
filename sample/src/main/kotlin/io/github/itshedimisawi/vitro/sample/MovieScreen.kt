@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.glassBackdrop
+import io.github.itshedimisawi.vitro.glassEffectContainer
 import io.github.itshedimisawi.vitro.rememberGlassBackdrop
 import io.github.itshedimisawi.vitro.scrollEdgeEffect
 
@@ -125,7 +126,8 @@ fun MovieScreen(onSchedule: () -> Unit) {
                 Spacer(Modifier.height(ActionTop))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(horizontal = Margin),
+                    // One container draws both buttons in a single pass; at no spacing they stay apart.
+                    modifier = Modifier.glassEffectContainer(spacing = 0.dp).padding(horizontal = Margin),
                 ) {
                     GlassIconButton(Icons.Rounded.PlayArrow, "Play trailer", {}, backdrop, size = ActionHeight)
                     GlassTextButton(
@@ -160,8 +162,8 @@ fun MovieScreen(onSchedule: () -> Unit) {
 }
 
 /**
- * Rests the sheet at one of two detents, at the poster or fully raised under the toolbar, like an
- * iOS sheet: a scroll that ends between them settles on the nearer one. Past [expanded] it scrolls freely.
+ * Rests the sheet at the poster or fully raised under the toolbar, like an iOS sheet: a scroll
+ * ending between the two settles on the nearer one. Past [expanded] it scrolls freely.
  */
 @Composable
 private fun SheetDetents(scroll: ScrollState, expanded: Int) {

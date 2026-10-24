@@ -19,9 +19,46 @@ import io.github.itshedimisawi.vitro.internal.material.RimFloor
 internal object GlassShaders {
 
     const val Backdrop = "backdrop"
+    const val Content = "content"
 
     /** How many shapes one pass can join into a single outline. */
     const val MaxShapes = 8
+
+    /**
+     * Taps on each side of the centre of the Gaussian blur, each one standing for two neighbouring
+     * pixels: enough for a deviation of [MaxBlurSigma] pixels. Stronger blurs use the platform's.
+     */
+    const val MaxBlurTaps = 16
+    const val MaxBlurSigma = MaxBlurTaps * 2 / 3f
+
+    // The blur is a Gaussian over pixels reaching three deviations out, with the content past the
+    // edge of the view repeating its edge. Each tap reads between two pixels, so the filtering of
+    // the read weighs them as the curve does.
+    private const val Blur = """
+uniform float blurCount;
+uniform float blurCentre;
+uniform float2 blurTaps[$MaxBlurTaps];
+uniform float2 viewSize;
+
+float2 inView(float2 p) {
+    return clamp(p, float2(0.5), viewSize - 0.5);
+}
+"""
+
+    /** The first half of the blur: across, on the content of the view. */
+    const val BlurAcross = Blur + """
+uniform shader content;
+
+half4 main(float2 coord) {
+    half4 sum = content.eval(inView(coord)) * blurCentre;
+    for (int i = 0; i < $MaxBlurTaps; i++) {
+        if (float(i) >= blurCount) { break; }
+        float2 tap = float2(blurTaps[i].x, 0.0);
+        sum += (content.eval(inView(coord + tap)) + content.eval(inView(coord - tap))) * blurTaps[i].y;
+    }
+    return sum;
+}
+"""
 
     // Every shape is a rounded rectangle given by its centre and half size, its corner radii and
     // how much it is enlarged. Shapes closer than `blend` flow into one another.
@@ -31,7 +68,18 @@ uniform float blend;
 uniform float4 frames[$MaxShapes];
 uniform float4 corners[$MaxShapes];
 uniform float4 grows[$MaxShapes];
+uniform float4 clips[$MaxShapes];
 uniform float density;
+
+// Whether a shape adds nothing at coord: it is cut away there, or lies further than reach past
+// its outline. Testing its box first spares working out the outline of every shape everywhere.
+bool isAway(float2 coord, float4 frame, float2 grow, float4 clip, float reach) {
+    if (coord.x < clip.x || coord.y < clip.y || coord.x >= clip.z || coord.y >= clip.w) {
+        return true;
+    }
+    float2 off = abs(coord - frame.xy) - frame.zw * grow;
+    return max(off.x, off.y) > reach;
+}
 
 float radiusAt(float2 p, float4 radii) {
     float2 side = p.x < 0.0 ? radii.xw : radii.yz;
@@ -72,27 +120,35 @@ float join(float joined, float next, float h) {
     const val Shadow = Outline + """
 uniform float2 shadow;
 
+// Shapes that stand apart cast their shadows one over another, as pieces drawn on their own do.
+// Where shapes join, the joined outline casts one shadow, bridge included.
 half4 main(float2 coord) {
     float sd = 100000.0;
     float dropped = 100000.0;
     float opacity = 0.0;
+    float clear = 1.0;
+    float joined = 0.0;
+    float spread = max(shadow.x, 1.0);
+    float reach = spread + shadow.y + blend + 1.0;
     for (int i = 0; i < $MaxShapes; i++) {
         if (float(i) >= count) { break; }
+        if (isAway(coord, frames[i], grows[i].xy, clips[i], reach)) { continue; }
         float d = shapeDistance(coord, frames[i], corners[i], grows[i].xy);
         sd = join(sd, d, share(sd, d));
         float below = shapeDistance(coord - float2(0.0, shadow.y), frames[i], corners[i], grows[i].xy);
         float h = share(dropped, below);
+        joined = max(joined, 4.0 * h * (1.0 - h));
         dropped = join(dropped, below, h);
         opacity = mix(opacity, grows[i].z, h);
+        clear *= 1.0 - grows[i].z * (1.0 - smoothstep(-spread, spread, below));
     }
     float cover = clamp(0.5 - sd, 0.0, 1.0);
-    float spread = max(shadow.x, 1.0);
-    float soft = 1.0 - smoothstep(-spread, spread, dropped);
-    return half4(0.0, 0.0, 0.0, opacity * soft * (1.0 - cover));
+    float merged = opacity * (1.0 - smoothstep(-spread, spread, dropped));
+    return half4(0.0, 0.0, 0.0, mix(1.0 - clear, merged, joined) * (1.0 - cover));
 }
 """
 
-    const val Material = Outline + """
+    const val Material = Outline + Blur + """
 uniform shader backdrop;
 uniform float4 traits[$MaxShapes];
 uniform float4 tints[$MaxShapes];
@@ -104,6 +160,19 @@ uniform float saturation;
 uniform float brightness;
 uniform float2 light;
 uniform float highlight;
+uniform float2 shadow;
+
+// The backdrop at p, blurred down the view: the second half of the blur, after it was blurred
+// across. With no taps it is the backdrop as it comes, blurred beforehand by the platform.
+float3 seen(float2 p) {
+    float3 sum = backdrop.eval(inView(p)).rgb * blurCentre;
+    for (int i = 0; i < $MaxBlurTaps; i++) {
+        if (float(i) >= blurCount) { break; }
+        float2 tap = float2(0.0, blurTaps[i].x);
+        sum += (backdrop.eval(inView(p + tap)).rgb + backdrop.eval(inView(p - tap)).rgb) * blurTaps[i].y;
+    }
+    return sum;
+}
 
 half4 main(float2 coord) {
     float sd = 100000.0;
@@ -113,12 +182,15 @@ half4 main(float2 coord) {
     float dimming = 0.0;
     float glow = 0.0;
     float4 tint = float4(0.0);
+    float owner = 0.0;
     for (int i = 0; i < $MaxShapes; i++) {
         if (float(i) >= count) { break; }
+        if (isAway(coord, frames[i], grows[i].xy, clips[i], blend + 1.0)) { continue; }
         float2 p = coord - frames[i].xy;
         float2 halfSize = frames[i].zw;
         float d = shapeDistance(coord, frames[i], corners[i], grows[i].xy);
         float h = share(sd, d);
+        if (h > 0.5) { owner = float(i); }
         sd = join(sd, d, h);
         normal = mix(normal, outward(p / grows[i].xy, halfSize, corners[i]), h);
         pivot = mix(pivot, frames[i].xy, h);
@@ -141,12 +213,32 @@ half4 main(float2 coord) {
     float2 shift = -dir * depth * slope * slope * slope;
     float2 p = coord - pivot;
 
+    // Colours split apart where the content is pulled; elsewhere all three are read in one go.
     float fringe = 2.0 * dispersion;
-    float3 color = float3(
-        backdrop.eval(pivot + (p + shift * (1.0 - fringe)) * zoom).r,
-        backdrop.eval(pivot + (p + shift) * zoom).g,
-        backdrop.eval(pivot + (p + shift * (1.0 + fringe)) * zoom).b
-    );
+    float3 color;
+    if (fringe == 0.0 || slope == 0.0) {
+        color = seen(pivot + (p + shift) * zoom);
+    } else {
+        color = float3(
+            seen(pivot + (p + shift * (1.0 - fringe)) * zoom).r,
+            seen(pivot + (p + shift) * zoom).g,
+            seen(pivot + (p + shift * (1.0 + fringe)) * zoom).b
+        );
+    }
+
+    // A shape that stands apart from the shapes added before it sees their shadows on what lies
+    // under it, as a piece drawn on its own sees the pieces under it. Joined shapes do not.
+    if (shadow.x > 0.0) {
+        float2 under = pivot + (p + shift) * zoom;
+        float spread = max(shadow.x, 1.0);
+        for (int i = 0; i < $MaxShapes; i++) {
+            if (float(i) >= owner) { break; }
+            if (isAway(under, frames[i], grows[i].xy, clips[i], spread + shadow.y + 1.0)) { continue; }
+            float below = shapeDistance(under - float2(0.0, shadow.y), frames[i], corners[i], grows[i].xy);
+            float apart = clamp(shapeDistance(coord, frames[i], corners[i], grows[i].xy) / max(blend, 0.0001), 0.0, 1.0);
+            color *= 1.0 - grows[i].z * (1.0 - smoothstep(-spread, spread, below)) * apart;
+        }
+    }
 
     float3 weights = float3(0.2126, 0.7152, 0.0722);
     color = max(mix(float3(dot(color, weights)), color, saturation), 0.0);
@@ -184,6 +276,19 @@ half4 main(float2 coord) {
     color = mix(color, tint.rgb, tint.a);
     color *= 1.0 - dimming;
     color = clamp(color + glow, 0.0, 1.0);
+
+    // The shadows of shapes added after it fall over it, as pieces drawn on their own do.
+    if (shadow.x > 0.0) {
+        float spread = max(shadow.x, 1.0);
+        for (int i = 0; i < $MaxShapes; i++) {
+            if (float(i) >= count) { break; }
+            if (float(i) <= owner) { continue; }
+            if (isAway(coord, frames[i], grows[i].xy, clips[i], spread + shadow.y + 1.0)) { continue; }
+            float below = shapeDistance(coord - float2(0.0, shadow.y), frames[i], corners[i], grows[i].xy);
+            float apart = clamp(shapeDistance(coord, frames[i], corners[i], grows[i].xy) / max(blend, 0.0001), 0.0, 1.0);
+            color *= 1.0 - grows[i].z * (1.0 - smoothstep(-spread, spread, below)) * apart;
+        }
+    }
 
     return half4(color * cover, cover);
 }

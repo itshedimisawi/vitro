@@ -14,10 +14,7 @@ import io.github.itshedimisawi.vitro.internal.material.TintStrength
 import kotlin.math.max
 import kotlin.math.min
 
-/**
- * One piece of glass as it is drawn now: where its outline sits in the backdrop, its size at rest
- * and how the touch on it has changed it.
- */
+/** One piece of glass as drawn this frame: its outline in the backdrop and how touch changes it. */
 internal class GlassShape(var glass: Glass) {
     var origin: Offset = Offset.Zero
     var size: Size = Size.Zero
@@ -30,6 +27,9 @@ internal class GlassShape(var glass: Glass) {
 
     /** 0 for the light material, 1 for the dark one, in between while it changes over. */
     var darkness: Float = 0f
+
+    /** Where its parents let this glass show, in the backdrop; null when nothing cuts it. */
+    var clip: Rect? = null
 
     /** The outline at the size it is drawn, in the backdrop. */
     val grown: Rect
@@ -59,9 +59,8 @@ internal class GlassShape(var glass: Glass) {
 }
 
 /**
- * What a renderer draws in one go: a single [shape], or several [shapes] of the same material
- * that flow into one another where they come closer than [spacing]. Everything is laid out in a
- * frame of [extent] whose corner sits at [origin] in the backdrop.
+ * What a renderer draws in one go: one [shape], or several [shapes] of one material that blend
+ * closer than [spacing]. Positions are relative to a frame of [extent] at [origin] in the backdrop.
  */
 internal class GlassScene(
     val layer: GraphicsLayer,
@@ -80,35 +79,35 @@ internal class GlassScene(
     /** Those of [beneath] that this glass is inside of. */
     var enclosing: List<GlassPane> = emptyList()
 
+    /** Where any of this glass can show, from the corner of its frame; null when nothing cuts it. */
+    var visible: Rect? = null
+
     /** What this glass takes in of the backdrop, measured from the corner of its frame. */
     var view: Rect = Rect.Zero
     var revision: Int = 0
 
-    /** False while the renderer holds more room than this scene needs; it gives it back on the next draw. */
+    /** False while the renderer holds more room than needed, which it gives back on the next draw. */
     var isSettled: Boolean = true
 }
 
-/**
- * The area a scene paints on, measured from the corner of its frame: every outline at the size it
- * is drawn, and the shadow around and below it.
- */
+/** The area a scene paints on, from the corner of its frame: every outline and its shadow. */
 internal fun DrawScope.paintedBounds(scene: GlassScene): Rect {
-    val radius = scene.glass.shadowRadius.toPx()
-    val offset = scene.glass.shadowOffset.toPx()
-    var left = Float.POSITIVE_INFINITY
-    var top = Float.POSITIVE_INFINITY
-    var right = Float.NEGATIVE_INFINITY
-    var bottom = Float.NEGATIVE_INFINITY
-    for (shape in scene.shapes) {
-        val outline = shape.grown
-        val isShadowed = shape.shadowOpacity > 0f && radius > 0f
-        val grown = maxOf(shape.scaleX, shape.scaleY, 1f)
-        val spread = if (isShadowed) radius * grown else 0f
-        val drop = if (isShadowed) offset * grown else 0f
-        left = min(left, outline.left - spread)
-        top = min(top, outline.top - spread)
-        right = max(right, outline.right + spread)
-        bottom = max(bottom, outline.bottom + spread + drop)
-    }
-    return Rect(left, top, right, bottom).translate(-scene.origin.x, -scene.origin.y)
+    var painted: Rect? = null
+    for (shape in scene.shapes) painted = painted.joinedWith(paintedArea(shape, scene.glass))
+    return (painted ?: Rect.Zero).translate(-scene.origin.x, -scene.origin.y)
 }
+
+/** The area [shape] paints on in the backdrop: its outline as drawn and the shadow of [glass]. */
+internal fun DrawScope.paintedArea(shape: GlassShape, glass: Glass): Rect {
+    val radius = glass.shadowRadius.toPx()
+    val outline = shape.grown
+    val isShadowed = shape.shadowOpacity > 0f && radius > 0f
+    val grown = maxOf(shape.scaleX, shape.scaleY, 1f)
+    val spread = if (isShadowed) radius * grown else 0f
+    val drop = if (isShadowed) glass.shadowOffset.toPx() * grown else 0f
+    return Rect(outline.left - spread, outline.top - spread, outline.right + spread, outline.bottom + spread + drop)
+}
+
+/** The smallest rectangle around this one, if any, and [other]. */
+internal fun Rect?.joinedWith(other: Rect): Rect =
+    if (this == null) other else Rect(min(left, other.left), min(top, other.top), max(right, other.right), max(bottom, other.bottom))

@@ -3,6 +3,7 @@ package io.github.itshedimisawi.vitro
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -12,21 +13,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ScaleFactor
-import kotlinx.coroutines.CoroutineScope
 import kotlin.math.sqrt
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * The touch on a piece of interactive glass: whether it is held, how firmly, and where the finger
- * is.
+ * The live state of one piece of glass: the material it shows and the touch on it.
  *
- * Interactive glass keeps one of these itself. Create your own with
- * [rememberGlassInteractionState] and pass it to [glassEffect] when other elements should react to
- * the same touch, such as a selection that swells and follows the finger while its bar is held.
- * Use one state per touched element.
+ * Pass it to [glassEffect] to read that state from the content or from other elements, for example
+ * to colour a label by [appearance]:
+ *
+ * ```
+ * val state = rememberGlassEffectState()
+ * Text(
+ *     "Done",
+ *     color = if (state.appearance == GlassAppearance.Dark) Color.White else Color.Black,
+ *     modifier = Modifier.glassEffect(backdrop, state = state).padding(16.dp),
+ * )
+ * ```
+ *
+ * Use one state per piece of glass.
  */
 @Stable
-public class GlassInteractionState {
+public class GlassEffectState internal constructor(appearance: GlassAppearance) {
 
     private val hold = Animatable(0f)
     private val settling = Animatable(Offset.Zero, Offset.VectorConverter)
@@ -35,35 +44,30 @@ public class GlassInteractionState {
     private var extent by mutableStateOf(Size.Zero)
     private var density = 1f
 
-    /** Whether a finger is down on the glass. */
+    /**
+     * The material the glass shows, [GlassAppearance.Light] or [GlassAppearance.Dark]. With
+     * [GlassAppearance.Automatic] glass it follows the theme and the content behind the glass.
+     */
+    public var appearance: GlassAppearance by mutableStateOf(appearance)
+        internal set
+
+    /** Whether a finger is down on [interactive][Glass.interactive] glass. */
     public var isHeld: Boolean by mutableStateOf(false)
         private set
 
-    /**
-     * Where the finger is, in the coordinates of the glass element. Keeps its last value after the
-     * finger lifts.
-     */
+    /** Where the finger is, relative to the glass. Keeps its last value after the finger lifts. */
     public var position: Offset by mutableStateOf(Offset.Zero)
         private set
 
-    /**
-     * How firmly the glass is held, from 0 at rest to 1 while pressed. It rises quickly on a press
-     * and rebounds once on release, so it briefly passes a little beyond either end.
-     */
+    /** How firmly the glass is pressed, from 0 at rest to 1 while held, overshooting slightly. */
     public val pressure: Float get() = hold.value
 
-    /**
-     * How far the finger has travelled since it went down. Returns to zero with a rebound once the
-     * finger lifts.
-     */
+    /** How far the finger has moved since it went down. Springs back to zero after release. */
     public val drag: Offset get() = if (isHeld) travel else settling.value
 
     /**
-     * How much the touch enlarges the glass along each axis: it swells while held and stretches
-     * along the direction the finger has pulled, thinning across it. 1 on both axes at rest.
-     *
-     * Together with [offset] this is the change the glass applies to itself and its content, about
-     * its centre. Apply the same to anything layered on top that should stay in register with it.
+     * How much the touch scales the glass on each axis, about its centre. Apply it with [offset]
+     * to anything drawn over the glass that should move with it.
      */
     public val scale: ScaleFactor
         get() {
@@ -76,9 +80,7 @@ public class GlassInteractionState {
             return ScaleFactor(swell * (1f + tug), swell * (1f - tug))
         }
 
-    /**
-     * How far the held glass has drifted toward the finger, in pixels. Larger glass drifts less.
-     */
+    /** How far, in pixels, the held glass has moved toward the finger. */
     public val offset: Offset get() = drag * (PullShift * lightness)
 
     /** Share of its longer side that the glass gains when fully pressed. */
@@ -145,8 +147,11 @@ private const val PullStretch = 0.00033f
 private const val MaxPull = 0.3f
 
 /**
- * Creates and remembers a [GlassInteractionState] for the current composition.
+ * Creates and remembers a [GlassEffectState]. Until the glass first draws, its
+ * [appearance][GlassEffectState.appearance] follows the system theme.
  */
 @Composable
-public fun rememberGlassInteractionState(): GlassInteractionState =
-    remember { GlassInteractionState() }
+public fun rememberGlassEffectState(): GlassEffectState {
+    val isDark = isSystemInDarkTheme()
+    return remember { GlassEffectState(if (isDark) GlassAppearance.Dark else GlassAppearance.Light) }
+}

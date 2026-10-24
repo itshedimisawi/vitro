@@ -7,14 +7,15 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import io.github.itshedimisawi.vitro.internal.material.LumaWeights
 import io.github.itshedimisawi.vitro.internal.render.GlassPane
+import java.nio.ByteBuffer
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.min
 import kotlin.math.pow
 
 /**
- * The colours of a backdrop on a coarse grid: one colour per square of [cell] pixels, kept as
- * red, green and blue one after another, and how much of each square the content covers, from 0
- * to 1. What the content leaves uncovered is unknown, not black, and does not count.
+ * The colours of a backdrop on a grid of [cell]-pixel squares, as red, green and blue triplets,
+ * with how much of each square the content covers. Uncovered areas do not count.
  */
 internal class BackdropTone internal constructor(
     private val columns: Int,
@@ -27,15 +28,12 @@ internal class BackdropTone internal constructor(
         require(colors.size == columns * rows * 3 && cover.size == columns * rows)
     }
 
-    // The light each cell gives off, worked out once since it is asked for on every frame that
-    // glass moves.
+    // The light of each cell, worked out once since moving glass asks for it every frame.
     private val light = FloatArray(columns * rows) { cell -> lightOf(colors, cell * 3) }
 
     /**
-     * Mean luminance of what lies inside [area], given in backdrop pixels: the backdrop as seen
-     * through the glass [beneath], lowest first. It is the light the content gives off, from 0
-     * to 1, so a few bright spots count for more than their share of the area and a saturated
-     * colour counts for more than a grey that looks as dark. NaN if the area misses the content.
+     * Mean light given off inside [area], in backdrop pixels, as seen through the glass [beneath],
+     * from 0 to 1. Bright spots and saturated colours weigh in as light does. NaN off the content.
      */
     fun luminance(area: Rect, beneath: List<GlassPane>): Float {
         val left = floor(area.left / cell).toInt().coerceAtLeast(0)
@@ -101,6 +99,31 @@ internal class BackdropTone internal constructor(
                 colors[index * 3 + 2] = (pixel and 0xFF) / 255f
             }
             return BackdropTone(bitmap.width, bitmap.height, cell, colors, cover)
+        }
+
+        /**
+         * Reads a picture of the backdrop drawn at one pixel per [cell] pixels, given as
+         * premultiplied red, green, blue and alpha bytes in rows [rowStride] bytes apart.
+         */
+        fun read(pixels: ByteBuffer, width: Int, height: Int, rowStride: Int, cell: Float): BackdropTone {
+            val colors = FloatArray(width * height * 3)
+            val cover = FloatArray(width * height)
+            for (row in 0 until height) {
+                var at = row * rowStride
+                for (column in 0 until width) {
+                    val index = row * width + column
+                    val alpha = pixels.get(at + 3).toInt() and 0xFF
+                    cover[index] = alpha / 255f
+                    if (alpha > 0) {
+                        val scale = 1f / alpha
+                        colors[index * 3] = min((pixels.get(at).toInt() and 0xFF) * scale, 1f)
+                        colors[index * 3 + 1] = min((pixels.get(at + 1).toInt() and 0xFF) * scale, 1f)
+                        colors[index * 3 + 2] = min((pixels.get(at + 2).toInt() and 0xFF) * scale, 1f)
+                    }
+                    at += 4
+                }
+            }
+            return BackdropTone(width, height, cell, colors, cover)
         }
 
         // The light a colour gives off: each channel's stored value turned linear, then weighted.

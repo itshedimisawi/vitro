@@ -5,9 +5,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * How a piece of glass changes the colour of what shows through it: its saturation and veil, how
- * far it is toward the dark material, its tint and its dimming. It follows the shader step by
- * step; refraction, blur and the rim are left out.
+ * How a piece of glass changes the colour of what shows through it, following the shader's colour
+ * steps: saturation, veil, darkness, tint and dimming. Refraction, blur and the rim are left out.
  */
 internal data class GlassShade(
     val saturation: Float,

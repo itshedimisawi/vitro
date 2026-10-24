@@ -1,6 +1,5 @@
 package io.github.itshedimisawi.vitro.sample
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -26,7 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -50,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.glassBackdrop
+import io.github.itshedimisawi.vitro.glassEffectContainer
 import io.github.itshedimisawi.vitro.rememberGlassBackdrop
 
 private val SeatPitch = 28.dp
@@ -135,6 +135,8 @@ private fun ChipRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
+            // One container draws the whole row in a single pass; at no spacing the chips stay apart.
+            .glassEffectContainer(spacing = 0.dp)
             .padding(horizontal = Margin),
     ) {
         labels.forEachIndexed { index, label ->
@@ -163,33 +165,32 @@ private fun ChipRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit
 @Composable
 private fun CinemaScreen() {
     val glow = MaterialTheme.colorScheme.primary
-    Canvas(Modifier.fillMaxWidth(0.76f).height(64.dp)) {
-        val edge = 18.dp.toPx()
-        val curve = Path().apply {
-            moveTo(0f, edge)
-            quadraticTo(size.width / 2f, -edge / 2f, size.width, edge)
-        }
-        val below = Path().apply {
-            addPath(curve)
-            lineTo(size.width, size.height)
-            lineTo(0f, size.height)
-            close()
-        }
-        clipPath(below) {
-            scale(scaleX = 1f, scaleY = 0.3f, pivot = Offset(size.width / 2f, edge / 2f)) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(glow.copy(alpha = 0.6f), Color.Transparent),
-                        center = Offset(size.width / 2f, edge / 2f),
-                        radius = size.width / 2f,
-                    ),
-                    radius = size.width / 2f,
-                    center = Offset(size.width / 2f, edge / 2f),
-                )
+    Spacer(
+        Modifier.fillMaxWidth(0.76f).height(64.dp).drawWithCache {
+            val edge = 18.dp.toPx()
+            val curve = Path().apply {
+                moveTo(0f, edge)
+                quadraticTo(size.width / 2f, -edge / 2f, size.width, edge)
             }
-        }
-        drawPath(curve, glow, style = Stroke(width = 2.dp.toPx()))
-    }
+            val below = Path().apply {
+                addPath(curve)
+                lineTo(size.width, size.height)
+                lineTo(0f, size.height)
+                close()
+            }
+            val centre = Offset(size.width / 2f, edge / 2f)
+            val light = Brush.radialGradient(listOf(glow.copy(alpha = 0.6f), Color.Transparent), centre, size.width / 2f)
+            val line = Stroke(width = 2.dp.toPx())
+            onDrawBehind {
+                clipPath(below) {
+                    scale(scaleX = 1f, scaleY = 0.3f, pivot = centre) {
+                        drawCircle(brush = light, radius = size.width / 2f, center = centre)
+                    }
+                }
+                drawPath(curve, glow, style = line)
+            }
+        },
+    )
 }
 
 @Composable
@@ -230,10 +231,9 @@ private fun Seat(row: Int, number: Int, isTaken: Boolean, isSelected: Boolean, p
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(pitch * 0.72f, pitch * 0.5f)
-                .drawBehind {
+                .drawWithCache {
                     val line = 1.5.dp.toPx()
                     val corner = CornerRadius(3.dp.toPx())
-                    drawRoundRect(fill, cornerRadius = corner)
                     // The back and armrests: an outline open at the top.
                     val half = line / 2f
                     val arms = Path().apply {
@@ -244,14 +244,18 @@ private fun Seat(row: Int, number: Int, isTaken: Boolean, isSelected: Boolean, p
                         quadraticTo(size.width - half, size.height - half, size.width - half, size.height - corner.x)
                         lineTo(size.width - half, 0f)
                     }
-                    drawPath(arms, outline, style = Stroke(line, cap = StrokeCap.Round))
-                    if (!isSelected) {
-                        drawRoundRect(
-                            color = outline.copy(alpha = 0.55f),
-                            topLeft = Offset(line * 2f, size.height * 0.45f),
-                            size = Size(size.width - line * 4f, size.height * 0.3f),
-                            cornerRadius = CornerRadius(1.dp.toPx()),
-                        )
+                    val stroke = Stroke(line, cap = StrokeCap.Round)
+                    onDrawBehind {
+                        drawRoundRect(fill, cornerRadius = corner)
+                        drawPath(arms, outline, style = stroke)
+                        if (!isSelected) {
+                            drawRoundRect(
+                                color = outline.copy(alpha = 0.55f),
+                                topLeft = Offset(line * 2f, size.height * 0.45f),
+                                size = Size(size.width - line * 4f, size.height * 0.3f),
+                                cornerRadius = CornerRadius(1.dp.toPx()),
+                            )
+                        }
                     }
                 },
         ) {

@@ -8,10 +8,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.GraphicsContext
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
-import androidx.compose.ui.graphics.drawscope.draw
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.TraversableNode
@@ -20,7 +19,8 @@ import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Dp
 import io.github.itshedimisawi.vitro.internal.render.GlassShaders
-import io.github.itshedimisawi.vitro.internal.render.paintedBounds
+import io.github.itshedimisawi.vitro.internal.render.joinedWith
+import io.github.itshedimisawi.vitro.internal.render.paintedArea
 
 internal class GlassContainerElement(
     private val spacing: Dp,
@@ -43,9 +43,8 @@ internal class GlassContainerElement(
 }
 
 /**
- * Collects the glass below it into groups that are drawn as one. It draws nothing itself: the
- * first piece of each group draws the material of the whole group where it stands, and every
- * piece then adds its own content.
+ * Collects the glass below it into groups drawn as one. The first piece of each group draws the
+ * group's material, and every piece draws its own content.
  */
 internal class GlassContainerNode(spacing: Dp) : Modifier.Node(), TraversableNode {
 
@@ -76,9 +75,8 @@ internal class GlassContainerNode(spacing: Dp) : Modifier.Node(), TraversableNod
     }
 
     /**
-     * Draws the material of the group that [lead] is the first piece of, in the scope [lead] is
-     * drawing in. Does nothing for the other pieces of a group. False if the group should be
-     * drawn once more, because its renderer has room to give back.
+     * Draws the material of the group that [lead] is first in; does nothing for other pieces.
+     * False when the group should be drawn once more to give back spare room.
      */
     @RequiresApi(33)
     fun ContentDrawScope.drawGroupLedBy(lead: GlassNode): Boolean {
@@ -86,9 +84,21 @@ internal class GlassContainerNode(spacing: Dp) : Modifier.Node(), TraversableNod
         val group = groups.firstOrNull { it.members.firstOrNull() === lead } ?: return true
         val position = lead.pane?.origin ?: return true
 
+        // Each piece keeps its own clip; the group shows as far as its pieces are visible.
         group.shapes.clear()
+        var isCut = false
+        var shown: Rect? = null
+        var painted: Rect? = null
         for (member in group.members) {
-            if (member.arrange()) member.shape?.let { group.shapes += it }
+            if (!member.arrange()) continue
+            val shape = member.shape ?: continue
+            group.shapes += shape
+            val own = member.pane?.clip
+            if (own != null) isCut = true
+            val outline = if (own == null) shape.grown else shape.grown.intersect(own)
+            val area = paintedArea(shape, member.glass).let { if (own == null) it else it.intersect(own) }
+            if (!outline.isEmpty) shown = shown.joinedWith(outline)
+            if (!area.isEmpty) painted = painted.joinedWith(area)
         }
         if (group.shapes.isEmpty()) return true
 
@@ -101,32 +111,18 @@ internal class GlassContainerNode(spacing: Dp) : Modifier.Node(), TraversableNod
         scene.origin = frame.topLeft
         scene.extent = frame.size
         scene.revision = group.backdrop.generation
-        scene.view = with(group.renderer) { view(scene) }
+        scene.visible = if (isCut) (shown ?: Rect.Zero).translate(-frame.left, -frame.top) else null
 
         val pane = group.pane
         pane.origin = position
-        pane.bounds = paintedBounds(scene).translate(scene.origin)
-        pane.view = scene.view.translate(scene.origin)
         pane.within = lead.pane?.within.orEmpty()
-        pane.clip = lead.pane?.clip
-        scene.beneath = group.beneath.value
-        scene.enclosing = pane.within
-
-        val screen = requireDensity()
-        val direction = layoutDirection
-        val bounds = size
-        val shift = scene.origin - position
-        pane.surface.record {
-            draw(screen, direction, drawContext.canvas, bounds, drawContext.graphicsLayer) {
-                translate(shift.x, shift.y) { with(group.renderer) { render(scene) } }
-            }
-        }
+        pane.clip = if (isCut) painted ?: Rect.Zero else null
+        val isSettled = recordMaterial(group.renderer, scene, pane, group.beneath, requireDensity())
         if (!lead.isInside) drawLayer(pane.surface)
-        return scene.isSettled
+        return isSettled
     }
 
-    // Pieces are drawn together when they share a backdrop and a material. A group that would
-    // outgrow one pass is continued in another.
+    // Pieces of one backdrop and material form a group, split when it outgrows one pass.
     @RequiresApi(33)
     private fun regroup(context: GraphicsContext) {
         groups.forEach { it.members.clear() }

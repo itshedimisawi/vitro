@@ -6,25 +6,25 @@ import androidx.compose.ui.unit.dp
 import io.github.itshedimisawi.vitro.internal.node.GlassContainerElement
 
 /**
- * Lets the glass inside this element flow together. Pieces that use [glassEffect] anywhere below
- * it are drawn as one surface: where two of them come closer than [spacing] their outlines reach
- * for each other and join, with the rim, the refraction and the shadow running unbroken across
- * the join. Pieces further apart look as they do on their own.
+ * Groups the glass inside this element so nearby pieces blend into one surface, and draws the
+ * group at the cost of a single piece.
  *
- * Use it around controls that sit next to each other or that move into one another, such as a
- * bar that splits into buttons.
+ * ```
+ * Row(Modifier.glassEffectContainer(spacing = 12.dp)) {
+ *     Icon(…, Modifier.glassEffect(backdrop))
+ *     Icon(…, Modifier.glassEffect(backdrop))
+ * }
+ * ```
  *
- * Only pieces of the same material join: they must share a backdrop and every property of their
- * [Glass] except [Glass.tint], [Glass.dimming], [Glass.appearance], [Glass.shadowOpacity] and
- * [Glass.isInteractive], which blend from one piece to the next. Other pieces in the container
- * are drawn alongside without joining. Joined pieces are drawn together where the first of them
- * stands, so content placed between them in drawing order ends up over their glass. A piece
- * placed inside the content of another piece stays separate.
+ * Use it for controls that sit together, such as a toolbar or a row of chips. With a [spacing] of
+ * zero the pieces never blend and look as they do on their own, so the container only saves work.
  *
- * Joining needs Android 13. On earlier versions this modifier changes nothing.
+ * - Pieces blend only when they share a backdrop and a [Glass] that differs at most in tint,
+ *   dimming, appearance, shadow opacity and interactivity. Other pieces are drawn separately.
+ * - A `graphicsLayer` that fades or rotates a single piece does not apply to its glass.
+ * - Blending needs Android 13. Earlier versions draw each piece separately.
  *
- * @param spacing Distance between two outlines below which they begin to join. At half of it the
- * bridge between them is plain to see.
+ * @param spacing How close two pieces must come before they start to blend.
  */
 public fun Modifier.glassEffectContainer(spacing: Dp = 8.5.dp): Modifier =
     this then GlassContainerElement(spacing)

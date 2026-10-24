@@ -6,35 +6,29 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Configuration of the glass material rendered by [glassEffect].
+ * The look of the glass drawn by [glassEffect].
  *
- * Start from [Glass.Regular] or [Glass.Clear] and refine with [tint], [interactive], [dimmed] or
- * [copy]. [Glass.Identity] turns the effect off. Instances are immutable and safe to share.
+ * Start from [Glass.Regular] or [Glass.Clear] and adjust it with [tint], [interactive], [dimmed]
+ * or [copy]. Use [Glass.Identity] to turn the glass off without changing the modifier chain.
  *
- * @property blurRadius How strongly content behind the glass is blurred.
- * @property refractionHeight Width of the curved rim, measured inward from the edge, where content
- * is bent. The bend eases off toward the inside, and the area beyond it stays undistorted.
- * @property refractionAmount How far the rim displaces the content it bends. Zero disables lensing.
- * @property dispersion Colour separation along the rim at rest, where 0 is none and around 0.1 is
- * a strong prism-like fringe. Interactive glass adds its own fringe while pressed.
- * @property magnification Size of the content seen through the glass, scaled about its centre. 1
- * shows it at its true size; below 1 shrinks it, so the glass takes in a wider area, edges of what
- * lies under it included; above 1 enlarges it. Values below 0.5 count as 0.5.
- * @property saturation Colour intensity of content seen through the glass, where 1 leaves it
- * unchanged.
- * @property brightness How strongly the luminosity of content seen through the glass is adjusted
- * for legibility, from 0 to 1. Its effect depends on [appearance]. Negative values darken toward
- * black in either appearance.
- * @property appearance Whether the material renders for a light or a dark interface.
- * @property tint Colour blended into the material, with its alpha setting the strength.
- * [Color.Unspecified] leaves the glass untinted.
- * @property dimming Opacity of the dark layer placed behind the glass, from 0 to 1.
- * @property lightAngle Direction the light comes from, in degrees clockwise from straight up.
- * @property highlightIntensity Strength of the rim and specular highlights, where 0 removes them.
- * @property shadowRadius Distance over which the shadow cast beneath the glass fades out.
- * @property shadowOffset Distance the shadow is shifted downward.
- * @property shadowOpacity Darkness of the shadow at its densest, from 0 to 1.
- * @property isInteractive Whether the glass reacts to touch and to its own movement.
+ * @property blurRadius How much the content behind the glass is blurred.
+ * @property refractionHeight Width of the rim, from the edge inward, where content is bent.
+ * @property refractionAmount How far the rim bends content. 0 turns bending off.
+ * @property dispersion Colour fringing along the rim, from 0 for none to about 0.1 for strong.
+ * @property magnification Zoom of the content seen through the glass. 1 is true size, below 1
+ * shows a wider area, above 1 enlarges. Never below 0.5.
+ * @property saturation Colour intensity of the content seen through the glass. 1 leaves it as is.
+ * @property brightness How much the glass lightens or darkens content to keep what's on it
+ * legible, from 0 to 1. Negative values darken.
+ * @property appearance Whether the glass uses the light or the dark material, or picks one itself.
+ * @property tint Colour mixed into the glass; its alpha sets the strength. Unspecified for none.
+ * @property dimming Opacity of a dark layer behind the glass, from 0 to 1.
+ * @property lightAngle Where the light comes from, in degrees clockwise from the top.
+ * @property highlightIntensity Strength of the rim highlights. 0 removes them.
+ * @property shadowRadius How far the shadow spreads.
+ * @property shadowOffset How far the shadow falls below the glass.
+ * @property shadowOpacity Darkness of the shadow, from 0 to 1.
+ * @property isInteractive Whether the glass reacts to touch and movement.
  */
 @Immutable
 public class Glass private constructor(
@@ -57,32 +51,19 @@ public class Glass private constructor(
     internal val isIdentity: Boolean = false,
 ) {
 
-    /**
-     * Returns a copy tinted with [color], used to give a control prominence.
-     *
-     * @param color Colour blended into the material; its alpha sets the strength.
-     */
+    /** Returns a copy tinted with [color], to make a control stand out. Its alpha sets the strength. */
     public fun tint(color: Color): Glass = copy(tint = color)
 
-    /**
-     * Returns a copy that responds to touch with scale, a highlight under the finger and an
-     * elastic stretch while it moves.
-     *
-     * @param isEnabled Whether the response is active.
-     */
+    /** Returns a copy that swells, glows and stretches under the finger, when [isEnabled]. */
     public fun interactive(isEnabled: Boolean = true): Glass = copy(isInteractive = isEnabled)
 
     /**
-     * Returns a copy with a dark layer behind the glass, for keeping content on [Clear] glass
-     * legible over bright backgrounds.
-     *
-     * @param opacity Opacity of the dark layer, from 0 to 1.
+     * Returns a copy darkened by [opacity], from 0 to 1, to keep content on [Clear] glass legible
+     * over bright content.
      */
     public fun dimmed(opacity: Float = 0.35f): Glass = copy(dimming = opacity)
 
-    /**
-     * Returns a copy with the given properties replaced. See [Glass] for what each one controls.
-     */
+    /** Returns a copy with the given properties replaced. */
     public fun copy(
         blurRadius: Dp = this.blurRadius,
         refractionHeight: Dp = this.refractionHeight,
@@ -175,10 +156,7 @@ public class Glass private constructor(
 
     public companion object {
 
-        /**
-         * The standard material. Blurs and adjusts the luminosity of what is behind it so text and
-         * symbols placed on top stay legible over any content.
-         */
+        /** The standard glass, for controls and bars. Content on it stays legible over anything. */
         public val Regular: Glass = Glass(
             blurRadius = 2.5.dp,
             refractionHeight = 12.dp,
@@ -199,8 +177,8 @@ public class Glass private constructor(
         )
 
         /**
-         * A highly translucent material that keeps what is behind it visible. Intended for
-         * controls floating over photos and video; combine with [dimmed] over bright content.
+         * Very see-through glass, for controls over photos and video. Pair it with [dimmed] over
+         * bright content.
          */
         public val Clear: Glass = Regular.copy(
             blurRadius = 2.dp,
@@ -208,11 +186,7 @@ public class Glass private constructor(
             brightness = 0.1f,
         )
 
-        /**
-         * Leaves the content as it is, with no material, shadow or lensing, as if no glass were
-         * applied. Use it to switch glass off without changing the modifier chain, for example
-         * when transparency should be reduced. Builders and [copy] keep it the identity.
-         */
+        /** No glass at all: content draws as if [glassEffect] were not applied, whatever [copy] changes. */
         public val Identity: Glass = with(Regular) {
             Glass(
                 blurRadius, refractionHeight, refractionAmount, dispersion, magnification, saturation,

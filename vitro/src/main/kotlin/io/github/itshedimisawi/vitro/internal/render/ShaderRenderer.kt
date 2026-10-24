@@ -22,16 +22,20 @@ import io.github.itshedimisawi.vitro.internal.material.TintStrength
 import io.github.itshedimisawi.vitro.internal.material.blurSigma
 import io.github.itshedimisawi.vitro.internal.material.lightDirection
 import io.github.itshedimisawi.vitro.internal.material.shownScale
+import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
-/** Android 13 and later: platform blur chained into the material shader, with a shader-drawn shadow. */
+/** Android 13 and later: the shadow and material shaders, with the blur split across two passes. */
 @RequiresApi(33)
 internal class ShaderRenderer : GlassRenderer {
 
     private val material = RuntimeShader(GlassShaders.Material)
+    private val across = RuntimeShader(GlassShaders.BlurAcross)
+    private val taps = BlurTaps()
     private val shadow = RuntimeShader(GlassShaders.Shadow)
     private val shadowBrush = ShaderBrush(shadow)
 
@@ -40,11 +44,13 @@ internal class ShaderRenderer : GlassRenderer {
     private val grows = FloatArray(GlassShaders.MaxShapes * 4)
     private val traits = FloatArray(GlassShaders.MaxShapes * 4)
     private val tints = FloatArray(GlassShaders.MaxShapes * 4)
+    private val clips = FloatArray(GlassShaders.MaxShapes * 4)
 
     private var wanted = IntSize.Zero
     private var held = IntSize.Zero
 
     override fun DrawScope.render(scene: GlassScene) {
+        if (scene.visible?.isEmpty == true) return
         drawShadow(scene)
         drawMaterial(scene)
     }
@@ -64,18 +70,33 @@ internal class ShaderRenderer : GlassRenderer {
         )
     }
 
-    // The view covers every outline at its grown size, so a pressed element shows what is really
-    // behind its larger footprint instead of a magnified copy. Glass that shrinks what it shows
-    // also reaches past its own outline.
+    // The view covers every outline at its grown size, so pressed glass shows what is really
+    // behind it. Glass that shrinks what it shows reaches past its outline.
     override fun DrawScope.view(scene: GlassScene): Rect {
         val reach = 1f / scene.glass.shownScale().coerceAtMost(1f)
         val border = blurBorder(scene.glass)
-        val needed = IntSize(
-            ceil(scene.extent.width).toInt() + 2 * (overhang(scene, reach, isWide = true) + border),
-            ceil(scene.extent.height).toInt() + 2 * (overhang(scene, reach, isWide = false) + border),
+        val wide = overhang(scene, reach, isWide = true) + border
+        val tall = overhang(scene, reach, isWide = false) + border
+        var area = Rect(
+            -wide.toFloat(),
+            -tall.toFloat(),
+            (ceil(scene.extent.width).toInt() + wide).toFloat(),
+            (ceil(scene.extent.height).toInt() + tall).toFloat(),
         )
-        // A layer is given a new buffer whenever its size changes, so while the glass is changing
-        // size the layer only grows, a step at a time, and takes its exact size once it rests.
+        // Partly hidden glass only needs what its visible part pulls in, plus the blur around it.
+        scene.visible?.let { visible ->
+            val pull = ceil(scene.glass.refractionAmount.toPx() * (1f + 2f * abs(scene.glass.dispersion)))
+            val margin = max(wide, tall) + pull + 1f
+            val seen = area.intersect(visible.inflate(margin))
+            area = if (seen.isEmpty) {
+                Rect.Zero
+            } else {
+                Rect(floor(seen.left), floor(seen.top), ceil(seen.right), ceil(seen.bottom))
+            }
+        }
+        val needed = IntSize(area.width.toInt(), area.height.toInt())
+        // A layer gets a new buffer on every size change, so it only grows in steps while the
+        // glass changes size, and takes its exact size once the glass rests.
         val room = GrowthRoom.roundToPx()
         held = when {
             needed == wanted -> needed
@@ -83,18 +104,16 @@ internal class ShaderRenderer : GlassRenderer {
         }
         wanted = needed
         scene.isSettled = held == needed
-        val left = -((held.width - ceil(scene.extent.width).toInt()) / 2).toFloat()
-        val top = -((held.height - ceil(scene.extent.height).toInt()) / 2).toFloat()
+        val left = area.left - (held.width - needed.width) / 2
+        val top = area.top - (held.height - needed.height) / 2
         return Rect(left, top, left + held.width, top + held.height)
     }
 
     private fun roomFor(needed: Int, held: Int, room: Int): Int = if (needed <= held) held else needed + room
 
     /**
-     * How far past the outline the view must reach for the blur to be right. Softening a pixel
-     * draws on its surroundings, and past the edge of the view there is nothing but the edge
-     * repeated. The rim only shows content from further in, so a light blur never looks that far
-     * out and needs no border; a heavy one does.
+     * How far past the outline the view reaches so the blur has real content to draw on. The rim
+     * shows content from further in, so only a heavy blur needs it.
      */
     private fun DrawScope.blurBorder(glass: Glass): Int {
         val blur = glass.blurRadius.toPx()
@@ -145,16 +164,25 @@ internal class ShaderRenderer : GlassRenderer {
         material.setFloatUniform("brightness", glass.brightness.coerceIn(-1f, 1f))
         material.setFloatUniform("light", light.x, light.y)
         material.setFloatUniform("highlight", glass.highlightIntensity)
+        material.setFloatUniform("shadow", glass.shadowRadius.toPx(), glass.shadowOffset.toPx())
 
+        // The shaders blur across in one pass and down as the material reads the content. A blur
+        // too strong for them uses the platform's.
         val blur = glass.blurRadius.toPx()
+        val sigma = if (blur > 0f) blurSigma(blur) else 0f
+        val isShaderBlur = sigma > 0f && sigma <= GlassShaders.MaxBlurSigma
+        taps.prepare(if (isShaderBlur) sigma else 0f)
+        material.setBlur(view)
         var effect = RenderEffect.createRuntimeShaderEffect(material, GlassShaders.Backdrop)
-        if (blur > 0f) {
+        if (isShaderBlur) {
+            across.setBlur(view)
+            effect = RenderEffect.createChainEffect(effect, RenderEffect.createRuntimeShaderEffect(across, GlassShaders.Content))
+        } else if (blur > 0f) {
             val softened = RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP)
             effect = RenderEffect.createChainEffect(effect, softened)
         }
         layer.renderEffect = effect.asComposeRenderEffect()
-        // The shader has no edge of its own: left unclipped, the system works it out for every
-        // pixel that could be drawn to, which is the whole screen for each piece of glass.
+        // Unclipped, the shader would run for every pixel of the screen.
         clipRect(view.left, view.top, view.right, view.bottom) { drawLayer(layer) }
     }
 
@@ -166,6 +194,13 @@ internal class ShaderRenderer : GlassRenderer {
             needed = max(needed, length * (scale - 1f) / 2f)
         }
         return ceil(needed).toInt()
+    }
+
+    private fun RuntimeShader.setBlur(view: Rect) {
+        setFloatUniform("blurCount", taps.count.toFloat())
+        setFloatUniform("blurCentre", taps.centre)
+        setFloatUniform("blurTaps", taps.taps)
+        setFloatUniform("viewSize", view.width, view.height)
     }
 
     private fun RuntimeShader.setShapes(scene: GlassScene, inset: Offset, density: Float) {
@@ -182,14 +217,25 @@ internal class ShaderRenderer : GlassRenderer {
             grows[at + 1] = shape.scaleY
             grows[at + 2] = shape.shadowOpacity
             grows[at + 3] = shape.glow
+            val clip = shape.clip
+            val shiftX = inset.x - scene.origin.x
+            val shiftY = inset.y - scene.origin.y
+            clips[at] = if (clip == null) -Open else clip.left + shiftX
+            clips[at + 1] = if (clip == null) -Open else clip.top + shiftY
+            clips[at + 2] = if (clip == null) Open else clip.right + shiftX
+            clips[at + 3] = if (clip == null) Open else clip.bottom + shiftY
         }
         setFloatUniform("count", count.toFloat())
         setFloatUniform("blend", scene.spacing)
         setFloatUniform("frames", frames)
         setFloatUniform("corners", corners)
         setFloatUniform("grows", grows)
+        setFloatUniform("clips", clips)
         setFloatUniform("density", density)
     }
 }
 
 private val GrowthRoom = 16.dp
+
+// A side of a clip that nothing cuts.
+private const val Open = 1_000_000f

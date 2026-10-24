@@ -30,7 +30,7 @@ internal const val PressGlowPerGrowth = 0.35f
 /** Share of a tint colour's alpha that is mixed into the material. */
 internal const val TintStrength = 0.85f
 
-/** The platform blur is a Gaussian of this deviation for a given radius, cut off [BlurReach] deviations out. */
+/** The platform blur is a Gaussian of this deviation per radius, cut off [BlurReach] deviations out. */
 internal const val BlurSigmaPerRadius = 0.57735f
 internal const val BlurSigmaBase = 0.5f
 internal const val BlurReach = 3f

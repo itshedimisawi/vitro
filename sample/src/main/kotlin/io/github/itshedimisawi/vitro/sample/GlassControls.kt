@@ -1,7 +1,6 @@
 package io.github.itshedimisawi.vitro.sample
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
@@ -17,11 +16,6 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,8 +28,9 @@ import androidx.compose.ui.unit.sp
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassAppearance
 import io.github.itshedimisawi.vitro.GlassBackdrop
-import io.github.itshedimisawi.vitro.GlassInteractionState
+import io.github.itshedimisawi.vitro.GlassEffectState
 import io.github.itshedimisawi.vitro.glassEffect
+import io.github.itshedimisawi.vitro.rememberGlassEffectState
 
 val ControlSize = 44.dp
 val ActionHeight = 50.dp
@@ -47,31 +42,9 @@ val Margin = 20.dp
 fun Modifier.tappable(onClick: () -> Unit): Modifier =
     clickable(interactionSource = null, indication = null, onClick = onClick)
 
-/** The colour for content on a piece of glass: white on the dark material, ink on the light one. */
-@Stable
-class GlassInk(isDark: Boolean) {
-    var isDark by mutableStateOf(isDark)
-        private set
-
-    val color: Color get() = if (isDark) Color.White else Ink
-
-    fun follow(appearance: GlassAppearance) {
-        isDark = appearance == GlassAppearance.Dark
-    }
-}
-
-/** Remembers a [GlassInk] for [glass]; pass its [GlassInk.follow] to the glass to keep it right. */
-@Composable
-fun rememberGlassInk(glass: Glass): GlassInk {
-    val isNight = isSystemInDarkTheme()
-    return remember {
-        GlassInk(glass.appearance == GlassAppearance.Dark || glass.appearance == GlassAppearance.Automatic && isNight)
-    }
-}
-
 /**
- * A piece of glass that tells its content which colour to draw with. Unless [contentColor] is
- * given, the colour follows the material the glass settles on.
+ * A piece of glass that colours its content to suit the material: white on dark glass, ink on
+ * light glass. A given [contentColor] is used instead.
  */
 @Composable
 fun GlassSurface(
@@ -80,12 +53,12 @@ fun GlassSurface(
     modifier: Modifier = Modifier,
     shape: CornerBasedShape = CircleShape,
     contentColor: Color = Color.Unspecified,
-    interaction: GlassInteractionState? = null,
+    state: GlassEffectState = rememberGlassEffectState(),
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val ink = rememberGlassInk(glass)
-    Box(modifier.glassEffect(backdrop, glass, shape, interaction, ink::follow)) {
-        CompositionLocalProvider(LocalContentColor provides contentColor.takeOrElse { ink.color }) {
+    val ink = if (state.appearance == GlassAppearance.Dark) Color.White else Ink
+    Box(modifier.glassEffect(backdrop, glass, shape, state)) {
+        CompositionLocalProvider(LocalContentColor provides contentColor.takeOrElse { ink }) {
             content()
         }
     }
@@ -111,7 +84,7 @@ fun GlassIconButton(
     }
 }
 
-/** One glass capsule shared by related icon actions, as on an iOS toolbar; fill it with [GlassGroupItem]s. */
+/** One glass capsule holding related icon actions, as on an iOS toolbar; fill it with [GlassGroupItem]s. */
 @Composable
 fun GlassButtonGroup(
     backdrop: GlassBackdrop,
@@ -131,7 +104,7 @@ fun GlassGroupItem(icon: ImageVector, label: String, onClick: () -> Unit) {
     }
 }
 
-/** A glass button with a centred label, sized by [modifier]. A disabled button is dimmed and ignores taps. */
+/** A glass button with a centred label, sized by [modifier]. When disabled it is dimmed and ignores taps. */
 @Composable
 fun GlassTextButton(
     text: String,

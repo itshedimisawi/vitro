@@ -15,7 +15,6 @@ import androidx.compose.ui.geometry.center
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -44,7 +43,7 @@ import androidx.compose.ui.unit.toSize
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassAppearance
 import io.github.itshedimisawi.vitro.GlassBackdrop
-import io.github.itshedimisawi.vitro.GlassInteractionState
+import io.github.itshedimisawi.vitro.GlassEffectState
 import io.github.itshedimisawi.vitro.internal.material.GlassShade
 import io.github.itshedimisawi.vitro.internal.material.PressGlow
 import io.github.itshedimisawi.vitro.internal.material.PressGlowPerGrowth
@@ -54,22 +53,19 @@ import io.github.itshedimisawi.vitro.internal.render.GlassRenderer
 import io.github.itshedimisawi.vitro.internal.render.GlassScene
 import io.github.itshedimisawi.vitro.internal.render.GlassShape
 import io.github.itshedimisawi.vitro.internal.render.createGlassRenderer
-import io.github.itshedimisawi.vitro.internal.render.paintedBounds
 import kotlinx.coroutines.launch
 
 internal class GlassEffectElement(
     private val backdrop: GlassBackdrop,
     private val glass: Glass,
     private val shape: CornerBasedShape,
-    private val interaction: GlassInteractionState?,
-    private val onAppearanceChanged: ((GlassAppearance) -> Unit)?,
+    private val state: GlassEffectState?,
 ) : ModifierNodeElement<GlassNode>() {
 
-    override fun create(): GlassNode =
-        GlassNode(backdrop, glass, shape, interaction, onAppearanceChanged)
+    override fun create(): GlassNode = GlassNode(backdrop, glass, shape, state)
 
     override fun update(node: GlassNode) {
-        node.update(backdrop, glass, shape, interaction, onAppearanceChanged)
+        node.update(backdrop, glass, shape, state)
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -77,8 +73,7 @@ internal class GlassEffectElement(
         properties["backdrop"] = backdrop
         properties["glass"] = glass
         properties["shape"] = shape
-        properties["interaction"] = interaction
-        properties["onAppearanceChanged"] = onAppearanceChanged
+        properties["state"] = state
     }
 
     override fun equals(other: Any?): Boolean =
@@ -86,15 +81,13 @@ internal class GlassEffectElement(
             other.backdrop === backdrop &&
             other.glass == glass &&
             other.shape == shape &&
-            other.interaction === interaction &&
-            other.onAppearanceChanged === onAppearanceChanged
+            other.state === state
 
     override fun hashCode(): Int {
         var result = backdrop.hashCode()
         result = 31 * result + glass.hashCode()
         result = 31 * result + shape.hashCode()
-        result = 31 * result + interaction.hashCode()
-        result = 31 * result + onAppearanceChanged.hashCode()
+        result = 31 * result + state.hashCode()
         return result
     }
 }
@@ -103,8 +96,7 @@ internal class GlassNode(
     backdrop: GlassBackdrop,
     glass: Glass,
     private var corners: CornerBasedShape,
-    interaction: GlassInteractionState?,
-    onAppearanceChanged: ((GlassAppearance) -> Unit)?,
+    state: GlassEffectState?,
 ) : Modifier.Node(),
     DrawModifierNode,
     GlobalPositionAwareModifierNode,
@@ -131,9 +123,9 @@ internal class GlassNode(
     private var placed = Offset.Unspecified
     private var isHidden = false
     private val motion = MotionStretch()
-    private val appearance = AppearanceFollower(onAppearanceChanged)
-    private val ownTouch = GlassInteractionState()
-    private var touch = interaction ?: ownTouch
+    private val ownState = GlassEffectState(GlassAppearance.Light)
+    private var touch = state ?: ownState
+    private val appearance = AppearanceFollower { touch.appearance = it }
     private var measured = Size.Zero
     private var isNight by mutableStateOf(false)
 
@@ -154,10 +146,8 @@ internal class GlassNode(
         backdrop: GlassBackdrop,
         glass: Glass,
         shape: CornerBasedShape,
-        interaction: GlassInteractionState?,
-        onAppearanceChanged: ((GlassAppearance) -> Unit)?,
+        state: GlassEffectState?,
     ) {
-        appearance.onChanged = onAppearanceChanged
         this.glass = glass
         material = glass.material()
         if (backdrop !== this.backdrop) {
@@ -173,7 +163,11 @@ internal class GlassNode(
         }
         appearance.watch(if (wantsTone) backdrop else null)
         corners = shape
-        touch = interaction ?: ownTouch
+        val wanted = state ?: ownState
+        if (wanted !== touch) {
+            wanted.appearance = touch.appearance
+            touch = wanted
+        }
         touch.resize(measured, requireDensity().density)
         if (!glass.isInteractive) settle()
         invalidateDraw()
@@ -196,8 +190,7 @@ internal class GlassNode(
         }
         appearance.watch(if (wantsTone) backdrop else null)
         renderer = createGlassRenderer(context, coroutineScope)
-        // Glass in a container is drawn by it, joined with its neighbours. A piece inside the
-        // content of another piece of the same container stays on its own.
+        // Glass in a container is drawn by it, except a piece inside another piece of the same one.
         val around = findNearestAncestor(GlassContainerNode) as? GlassContainerNode
         val outer = findNearestAncestor(GlassNode) as? GlassNode
         if (around != null && around.isJoining && outer?.container !== around) {
@@ -274,6 +267,8 @@ internal class GlassNode(
         pane.shade = shape.shade()
         pane.within = enclosingGlass(backdrop, pane.within)
         pane.clip = if (isInside) clipAround(source, Rect(position, measured)) else null
+        shape.clip = pane.clip
+        scene.visible = pane.clip?.translate(-shape.origin.x, -shape.origin.y)
         return true
     }
 
@@ -289,12 +284,8 @@ internal class GlassNode(
         val shift = shape.origin - pane.origin
         val bounds = size
         redraws
-        if (pane.clip?.isEmpty == true) {
-            pane.bounds = Rect(shape.origin, Size.Zero)
-            pane.view = pane.bounds
-            return
-        }
 
+        // The first piece draws its whole group, even while it is itself out of sight.
         val around = container
         if (around != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             pane.bounds = shape.grown
@@ -305,22 +296,13 @@ internal class GlassNode(
             if (!isInside) drawLayer(pane.layer)
             return
         }
-
-        // While recording, this scope stands in as its own density, so reading a density from it
-        // would never return. The renderer therefore draws with the real one handed to it.
-        val screen = requireDensity()
-        val direction = layoutDirection
-        scene.view = with(renderer) { view(scene) }
-        pane.bounds = paintedBounds(scene).translate(scene.origin)
-        pane.view = scene.view.translate(scene.origin)
-        scene.beneath = beneath?.value.orEmpty()
-        scene.enclosing = pane.within
-        pane.surface.record {
-            draw(screen, direction, drawContext.canvas, bounds, drawContext.graphicsLayer) {
-                translate(shift.x, shift.y) { with(renderer) { render(scene) } }
-            }
+        if (pane.clip?.isEmpty == true) {
+            pane.bounds = Rect(shape.origin, Size.Zero)
+            pane.view = pane.bounds
+            return
         }
-        if (!scene.isSettled) drawAgain()
+
+        if (!recordMaterial(renderer, scene, pane, beneath, requireDensity())) drawAgain()
         pane.layer.record {
             drawLayer(pane.surface)
             drawContentOn(this@draw, shape, shift, bounds)
@@ -372,11 +354,10 @@ internal class GlassNode(
         return source.isAttached && source.localBoundingBoxOf(coordinates, clipBounds = true).isEmpty
     }
 
-    private fun isPartOf(backdrop: GlassBackdrop): Boolean =
-        (findNearestAncestor(BackdropNode) as? BackdropNode)?.backdrop === backdrop
+    private fun isPartOf(backdrop: GlassBackdrop): Boolean = enclosingBackdrop() === backdrop
 
-    // Where the parents of this glass let it show, in the backdrop: open on every side they
-    // leave alone, so shadow and swell still draw past its own bounds there.
+    // Where the parents of this glass let it show, in the backdrop. Sides they leave alone stay
+    // open, so shadow and swell can draw past the bounds there.
     private fun clipAround(source: LayoutCoordinates, full: Rect): Rect? {
         val seen = source.localBoundingBoxOf(requireLayoutCoordinates(), clipBounds = true)
         if (seen.isEmpty) return Rect.Zero

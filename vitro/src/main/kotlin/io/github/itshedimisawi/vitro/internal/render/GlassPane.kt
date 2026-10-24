@@ -9,22 +9,27 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import io.github.itshedimisawi.vitro.internal.material.GlassShade
 
 /**
- * One piece of glass over a backdrop, as glass placed above it sees it. [surface] holds its
- * shadow and material, and [layer] holds those with its content on top.
- *
- * It also records where its corner sits ([origin]), its [outline], the area of the backdrop it
- * paints on ([bounds]) and the area it takes in ([view]), how its material changes what shows
- * through it ([shade]), and the glass it lies [within], outermost first. A pane that is part of
- * the backdrop's own content ([isContent]) carries the [clip] its parents put on it, null when
- * there is none.
+ * One piece of glass over a backdrop, as the glass above it sees it. [surface] holds its shadow and
+ * material, [layer] those with its content on top. Areas are in backdrop coordinates.
  */
 internal class GlassPane(val surface: GraphicsLayer, val layer: GraphicsLayer) {
+    /** Whether the pane is part of the backdrop's own content. */
     var isContent = false
+
+    /** Where its parents let the pane show, when it is part of the content; null when uncut. */
     var clip by mutableStateOf<Rect?>(null)
     var origin by mutableStateOf(Offset.Zero)
     var outline by mutableStateOf(Rect.Zero)
+
+    /** The area the pane paints on, shadow included. */
     var bounds by mutableStateOf(Rect.Zero)
+
+    /** The area of the backdrop the pane takes in. */
     var view by mutableStateOf(Rect.Zero)
+
+    /** How the material changes the colour of what shows through it. */
     var shade by mutableStateOf(GlassShade.None)
+
+    /** The glass this pane lies inside, outermost first. */
     var within by mutableStateOf(emptyList<GlassPane>())
 }

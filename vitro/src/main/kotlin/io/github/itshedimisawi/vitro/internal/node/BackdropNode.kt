@@ -14,6 +14,7 @@ import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.TraversableNode
+import androidx.compose.ui.node.UnplacedAwareModifierNode
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.requireView
 import androidx.compose.ui.platform.InspectorInfo
@@ -42,7 +43,7 @@ internal class GlassBackdropElement(
 
 internal class BackdropNode(
     var backdrop: GlassBackdrop,
-) : Modifier.Node(), DrawModifierNode, GlobalPositionAwareModifierNode, TraversableNode {
+) : Modifier.Node(), DrawModifierNode, GlobalPositionAwareModifierNode, UnplacedAwareModifierNode, TraversableNode {
 
     override val traverseKey: Any get() = BackdropNode
 
@@ -52,9 +53,8 @@ internal class BackdropNode(
     override fun ContentDrawScope.draw() {
         backdrop.layer.record { this@draw.drawContent() }
         drawLayer(backdrop.layer)
-        // Glass that is part of the content has kept out of the recording; it goes on top here.
-        // A scroll edge effect softens it as it softens the content: its veils are laid over the
-        // glass alone, which on top of the softened content gives the softened whole.
+        // Glass inside the content stays out of the recording and is drawn on top here, softened
+        // by the scroll edge effect's veils like the rest of the content.
         val edge = backdrop.edge
         when {
             backdrop.inside.isEmpty() -> Unit
@@ -68,9 +68,9 @@ internal class BackdropNode(
                 drawLayer(layer)
             }
         }
-        // Only the snapshot-based renderer needs to be told that the content changed.
+        // Only the snapshot renderer needs to know that the content changed.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) backdrop.generation++
-        if (backdrop.toneWatchers > 0) {
+        if (backdrop.isToneWatched) {
             with(reader) { read(backdrop.layer, requireGraphicsContext(), coroutineScope, requireView()) }
         } else {
             reader.pause()
@@ -92,6 +92,11 @@ internal class BackdropNode(
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
         backdrop.coordinates = coordinates
+    }
+
+    // Unplaced content is not drawn, so there is nothing to read until it is placed again.
+    override fun onUnplaced() {
+        reader.pause()
     }
 
     override fun onDetach() {

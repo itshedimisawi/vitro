@@ -5,13 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -74,16 +67,7 @@ fun ShowcaseApp() {
     val colors = if (isSystemInDarkTheme()) DarkColors else LightColors
     MaterialTheme(colorScheme = colors) {
         Surface(color = colors.background, contentColor = colors.onBackground) {
-            AnimatedContent(
-                targetState = screen,
-                transitionSpec = {
-                    val forward = targetState > initialState
-                    val enter = slideInHorizontally(tween(350)) { if (forward) it / 3 else -it / 3 } + fadeIn(tween(350))
-                    val exit = slideOutHorizontally(tween(350)) { if (forward) -it / 3 else it / 3 } + fadeOut(tween(250))
-                    enter togetherWith exit
-                },
-                label = "screen",
-            ) { shown ->
+            ScreenStack(screen) { shown ->
                 when (shown) {
                     Screen.Movie -> MovieScreen(onSchedule = { screen = Screen.Seats })
                     Screen.Seats -> SeatsScreen(
