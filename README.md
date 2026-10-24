@@ -14,6 +14,10 @@ Vitro brings Apple's Liquid Glass material to Android as plain Compose modifiers
 - **Well optimized.** Rendering is kept lean: each piece of glass takes only a few GPU passes, grouped glass is drawn together at the cost of a single piece, glass out of sight isn't rendered, and the content behind the glass is sampled off the render thread. Scrolling and touch stay smooth, even on entry-level phones.
 - **Works from Android 6.** Android 13 and later get the full shader effect; older versions get a close approximation.
 
+<p align="center">
+  <img src="docs/vitro-scroll.webp" alt="A glass toolbar over a film poster as the page scrolls under it: the glass refracts the artwork, turns dark over the page, and a Tickets button grows out of it">
+</p>
+
 ## Features
 
 - Refraction at the rim, colour fringing, highlights and a soft shadow
